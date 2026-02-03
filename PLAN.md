@@ -73,6 +73,39 @@
 - Subagent usage patterns.
 - SDK embedding examples.
 
+## Core Parity Gaps vs pi-mono (Focus Areas 1–4)
+
+**1. Runtime loop + tools** (Phase 1)
+
+- Steering and follow-up message queues (one-at-a-time vs all).
+- Thinking levels and per-level budgets.
+- Custom stream function hook for proxy/backends.
+- Session ID propagation for provider caching.
+- Dynamic API key resolution hook.
+- Richer agent state (current stream message, pending tool calls).
+
+**2. Session model** (Phase 2)
+
+- JSONL session manager with tree/branching model.
+- Resume/fork/tree navigation workflows.
+- Compaction pipeline (manual + automatic).
+- Session metadata (labels, display names, model changes).
+- Export to HTML/JSONL.
+
+**3. Provider/auth/model registry** (Phase 2)
+
+- Provider registry with tool-capable model list.
+- Auth storage + OAuth-based login flows.
+- Model selection and fallback logic.
+- Provider-specific options/config resolution.
+
+**4. Resources/customization** (Phase 3)
+
+- Resource loader for skills, prompts, extensions, themes.
+- Context file discovery (`AGENTS.md`, `SYSTEM.md`, append flows).
+- Extension API (tool interception/override, events, commands, UI hooks).
+- Prompt templates and package discovery/install.
+
 #### Future examples backlog (post-feature work)
 
 - Skills/prompts/extensions loading and override hooks.
