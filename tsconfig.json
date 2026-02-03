@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/agent-core" },
+    { "path": "./packages/agent-sdk" },
+    { "path": "./packages/tui" },
+    { "path": "./packages/coding-agent" }
+  ]
+}
