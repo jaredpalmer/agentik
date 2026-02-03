@@ -15,7 +15,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@ai-sdk/provider-utils": "^4.0.13",
     "ai": "^6.0.68",
-    "@ai-sdk/provider-utils": "^4.0.13"
+    "glob": "^10.3.10"
   }
 }

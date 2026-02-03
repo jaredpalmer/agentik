@@ -21,7 +21,7 @@ import type {
   AgentState,
 } from './types';
 import { defaultConvertToModelMessages } from './message-utils';
-import { createToolSet } from './tools';
+import { createToolSet } from './toolset';
 
 type StreamPart = {
   type: string;

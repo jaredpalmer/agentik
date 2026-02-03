@@ -20,4 +20,5 @@ export {
   type SessionEntry,
   type SessionTree,
 } from './types';
-export { createToolSet, type ToolEventHandlers } from './tools';
+export { createToolSet, type ToolEventHandlers } from './toolset';
+export * from './tools';
