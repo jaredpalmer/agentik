@@ -2,6 +2,10 @@
 
 Instructions for AI coding agents working with this codebase.
 
+## Style
+
+- Honor and mirror the code style in vercel/ai (the AI SDK)
+
 <!-- opensrc:start -->
 
 ## Source Code Reference
