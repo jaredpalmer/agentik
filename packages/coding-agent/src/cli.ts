@@ -1,6 +1,18 @@
-import type { LanguageModel } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
+import {
+  createBashTool,
+  createEditTool,
+  createGlobTool,
+  createListTool,
+  createReadTool,
+  createUpdateTool,
+  createWebFetchTool,
+  createWriteTool,
+  type AgentToolDefinition,
+} from "@openagent/agent-core";
 import { createAgentSession } from "@openagent/agent-sdk";
 import { TuiApp } from "@openagent/tui";
+import { pathToFileURL } from "node:url";
 
 type CliMode = "interactive" | "print" | "rpc";
 
@@ -14,8 +26,24 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     throw new Error("OPENAGENT_MODEL is required.");
   }
 
-  const model = modelId as LanguageModel;
-  const { session } = await createAgentSession({ model });
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is required.");
+  }
+
+  const model = anthropic(modelId);
+  const cwd = process.cwd();
+  const tools = [
+    createReadTool(cwd),
+    createWriteTool(cwd),
+    createEditTool(cwd),
+    createUpdateTool(cwd),
+    createListTool(cwd),
+    createGlobTool(cwd),
+    createBashTool(cwd),
+    createWebFetchTool(),
+  ] as unknown as AgentToolDefinition[];
+
+  const { session } = await createAgentSession({ model, tools });
 
   if (mode === "interactive") {
     const app = new TuiApp({ runtime: session.runtime });
@@ -56,4 +84,12 @@ function getArgValue(argv: string[], name: string): string | undefined {
     return undefined;
   }
   return argv[index + 1];
+}
+
+const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
+if (entryUrl && import.meta.url === entryUrl) {
+  runCli().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }

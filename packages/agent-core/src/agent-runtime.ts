@@ -153,6 +153,14 @@ export class AgentRuntime<CALL_OPTIONS = never> {
 
       const endedToolCalls = new Set<string>();
       const toolSet = createToolSet(this.stateInternal.tools, {
+        onStart: ({ toolCallId, toolName, input }) => {
+          this.emit({
+            type: "tool_execution_start",
+            toolCallId,
+            toolName,
+            args: input,
+          });
+        },
         onUpdate: ({ toolCallId, toolName, partialResult }) => {
           this.emit({
             type: "tool_execution_update",
