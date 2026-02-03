@@ -1,12 +1,12 @@
 ---
-description: "Comprehensive PR review using specialized agents"
+description: "Comprehensive PR review using specialized skills"
 argument-hint: "[review-aspects]"
 allowed-tools: ["Bash", "Glob", "Grep", "Read", "Task"]
 ---
 
 # Comprehensive PR Review
 
-Run a comprehensive pull request review using multiple specialized agents, each focusing on a different aspect of code quality.
+Run a comprehensive pull request review using multiple specialized skills, each focusing on a different aspect of code quality.
 
 **Review Aspects (optional):** "$ARGUMENTS"
 
@@ -41,7 +41,7 @@ Run a comprehensive pull request review using multiple specialized agents, each 
    - **If types added/modified**: type-design-analyzer
    - **After passing review**: code-simplifier (polish and refine)
 
-5. **Launch Review Agents**
+5. **Launch Review Skills**
 
    **Sequential approach** (one at a time):
    - Easier to understand and act on
@@ -49,13 +49,13 @@ Run a comprehensive pull request review using multiple specialized agents, each 
    - Good for interactive review
 
    **Parallel approach** (user can request):
-   - Launch all agents simultaneously
+   - Launch all skills simultaneously
    - Faster for comprehensive review
    - Results come back together
 
 6. **Aggregate Results**
 
-   After agents complete, summarize:
+   After skills complete, summarize:
    - **Critical Issues** (must fix before merge)
    - **Important Issues** (should fix)
    - **Suggestions** (nice to have)
@@ -70,15 +70,15 @@ Run a comprehensive pull request review using multiple specialized agents, each 
 
    ## Critical Issues (X found)
 
-   - [agent-name]: Issue description [file:line]
+   - [skill-name]: Issue description [file:line]
 
    ## Important Issues (X found)
 
-   - [agent-name]: Issue description [file:line]
+   - [skill-name]: Issue description [file:line]
 
    ## Suggestions (X found)
 
-   - [agent-name]: Suggestion [file:line]
+   - [skill-name]: Suggestion [file:line]
 
    ## Strengths
 
@@ -117,10 +117,10 @@ Run a comprehensive pull request review using multiple specialized agents, each 
 
 ```
 /pr-review-toolkit:review-pr all parallel
-# Launches all agents in parallel
+# Launches all skills in parallel
 ```
 
-## Agent Descriptions:
+## Skill Descriptions:
 
 **comment-analyzer**:
 
@@ -199,8 +199,8 @@ Run a comprehensive pull request review using multiple specialized agents, each 
 
 ## Notes:
 
-- Agents run autonomously and return detailed reports
-- Each agent focuses on its specialty for deep analysis
+- Skills run autonomously and return detailed reports
+- Each skill focuses on its specialty for deep analysis
 - Results are actionable with specific file:line references
-- Agents use appropriate models for their complexity
-- All agents available in `/agents` list
+- Skills use appropriate models for their complexity
+- All skills available in the skills list
