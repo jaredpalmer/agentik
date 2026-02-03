@@ -8,13 +8,8 @@
       "path": "./packages/agent-sdk"
     },
     {
-      "path": "./packages/tui"
-    },
-    {
       "path": "./packages/coding-agent"
     }
   ],
-  "exclude": [
-    "opensrc"
-  ]
+  "exclude": ["opensrc"]
 }

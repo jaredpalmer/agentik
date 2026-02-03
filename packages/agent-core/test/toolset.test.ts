@@ -55,15 +55,18 @@ describe("toolset", () => {
       onUpdate: ({ partialResult }) => updates.push(partialResult.output as string),
     });
 
-    const tool = toolSet.stream as { execute?: Function };
+    const tool = toolSet.stream as {
+      execute: (
+        input: unknown,
+        options: { toolCallId: string; messages: [] }
+      ) =>
+        | AsyncIterable<{ output: string; ui?: string }>
+        | Promise<AsyncIterable<{ output: string; ui?: string }>>;
+    };
     const output: string[] = [];
-    for await (const chunk of (await tool.execute?.(
-      {},
-      { toolCallId: "call-2", messages: [] }
-    )) as AsyncIterable<
-      string
-    >) {
-      output.push(chunk);
+    const result = await tool.execute({}, { toolCallId: "call-2", messages: [] });
+    for await (const chunk of result) {
+      output.push(chunk.output);
     }
 
     expect(updates).toEqual(["step-1", "step-2"]);

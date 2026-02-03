@@ -1,10 +1,7 @@
 import {
-  BoxRenderable,
-  InputRenderable,
   InputRenderableEvents,
   ScrollBoxRenderable,
   StyledText,
-  TextRenderable,
   createCliRenderer,
   dim,
   fg,
@@ -14,10 +11,21 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import type { AgentEvent, AgentMessage, AgentRuntime } from "@openagent/agent-core";
+import { Box, InputField, Loader, MarkdownBlock, TextBlock, TruncatedText } from "./components";
 
 type DisplayMessage = {
   role: string;
   content: string;
+};
+
+type MessageKind = "markdown" | "text";
+
+type MessageEntry = DisplayMessage & {
+  id: string;
+  kind: MessageKind;
+  container?: Box;
+  label?: TruncatedText;
+  body?: TextBlock | MarkdownBlock;
 };
 
 export type TuiAppOptions = {
@@ -27,12 +35,14 @@ export type TuiAppOptions = {
 export class TuiApp {
   private runtime: AgentRuntime;
   private renderer?: CliRenderer;
-  private root?: BoxRenderable;
+  private root?: Box;
   private scrollBox?: ScrollBoxRenderable;
-  private messagesView?: TextRenderable;
-  private statusView?: TextRenderable;
-  private input?: InputRenderable;
-  private messages: DisplayMessage[] = [];
+  private statusBar?: Box;
+  private statusText?: TruncatedText;
+  private statusLoader?: Loader;
+  private input?: InputField;
+  private messages: MessageEntry[] = [];
+  private messageId = 0;
   private currentAssistantIndex?: number;
   private unsubscribe?: () => void;
   private isStreaming = false;
@@ -50,7 +60,7 @@ export class TuiApp {
       return;
     }
     this.renderer = await createCliRenderer({ exitOnCtrlC: true });
-    this.root = new BoxRenderable(this.renderer, {
+    this.root = new Box(this.renderer, {
       id: "root",
       width: "100%",
       height: "100%",
@@ -63,6 +73,10 @@ export class TuiApp {
       scrollX: false,
       stickyScroll: true,
       stickyStart: "bottom",
+      contentOptions: {
+        flexDirection: "column",
+        width: "100%",
+      },
       scrollbarOptions: {
         trackOptions: {
           foregroundColor: "#3b4252",
@@ -70,18 +84,29 @@ export class TuiApp {
         },
       },
     });
-    this.messagesView = new TextRenderable(this.renderer, {
-      id: "messages",
-      width: "100%",
-      content: "",
-    });
-    this.statusView = new TextRenderable(this.renderer, {
+    this.statusBar = new Box(this.renderer, {
       id: "status",
       width: "100%",
       height: this.statusHeight,
-      content: "Ready",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 1,
     });
-    this.input = new InputRenderable(this.renderer, {
+    this.statusLoader = new Loader(this.renderer, {
+      message: "",
+      frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+      frameColor: "#7aa2b8",
+      messageColor: "#9aa0a6",
+    });
+    this.statusLoader.view.visible = false;
+    this.statusLoader.stop();
+    this.statusText = new TruncatedText(this.renderer, {
+      text: "Ready",
+      flexGrow: 1,
+    });
+    this.statusBar.add(this.statusLoader.view);
+    this.statusBar.add(this.statusText);
+    this.input = new InputField(this.renderer, {
       id: "input",
       width: "100%",
       placeholder: "Type a message and press Enter...",
@@ -91,9 +116,8 @@ export class TuiApp {
       backgroundColor: "transparent",
       maxLength: 4000,
     });
-    this.scrollBox.add(this.messagesView);
     this.root.add(this.scrollBox);
-    this.root.add(this.statusView);
+    this.root.add(this.statusBar);
     this.root.add(this.input);
     this.renderer.root.add(this.root);
     this.renderer.start();
@@ -143,12 +167,14 @@ export class TuiApp {
   stop(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.statusLoader?.destroy();
     this.renderer?.destroy();
     this.renderer = undefined;
     this.root = undefined;
     this.scrollBox = undefined;
-    this.messagesView = undefined;
-    this.statusView = undefined;
+    this.statusBar = undefined;
+    this.statusText = undefined;
+    this.statusLoader = undefined;
     this.input = undefined;
     this.messages = [];
     this.currentAssistantIndex = undefined;
@@ -173,7 +199,8 @@ export class TuiApp {
           break;
         }
         const entry = this.formatMessage(event.message);
-        this.messages.push(entry);
+        const messageEntry = this.createMessageEntry(entry);
+        this.messages.push(messageEntry);
         if (entry.role === "assistant") {
           this.currentAssistantIndex = this.messages.length - 1;
         }
@@ -182,7 +209,9 @@ export class TuiApp {
       }
       case "message_update": {
         if (this.currentAssistantIndex != null) {
-          this.messages[this.currentAssistantIndex].content += event.delta;
+          const entry = this.messages[this.currentAssistantIndex];
+          entry.content += event.delta;
+          this.applyMessageContent(entry, entry.content);
           this.render();
         }
         break;
@@ -194,12 +223,17 @@ export class TuiApp {
         if (this.messages.length > 0) {
           const entry = this.formatMessage(event.message);
           if (entry.role === "assistant" && entry.content.trim().length === 0) {
-            this.messages.pop();
+            const removed = this.messages.pop();
+            if (removed?.container) {
+              this.scrollBox?.remove(removed.container.id);
+            }
             this.currentAssistantIndex = undefined;
             this.render();
             break;
           }
-          this.messages[this.messages.length - 1] = entry;
+          const existing = this.messages[this.messages.length - 1];
+          existing.role = entry.role;
+          this.applyMessageContent(existing, entry.content);
           if (entry.role === "assistant") {
             this.currentAssistantIndex = undefined;
           }
@@ -213,7 +247,8 @@ export class TuiApp {
           status: "running",
           args: event.args,
         });
-        const index = this.messages.push({ role: "tool", content }) - 1;
+        const messageEntry = this.createMessageEntry({ role: "tool", content });
+        const index = this.messages.push(messageEntry) - 1;
         this.toolCallEntries.set(event.toolCallId, {
           index,
           toolName: event.toolName,
@@ -227,21 +262,23 @@ export class TuiApp {
         const existing = this.toolCallEntries.get(event.toolCallId);
         const index =
           existing?.index ??
-          this.messages.push({
-            role: "tool",
-            content: this.formatToolContent({
-              toolName: event.toolName,
-              status: "running",
-              args: existing?.args,
-            }),
-          }) - 1;
+          this.messages.push(
+            this.createMessageEntry({
+              role: "tool",
+              content: this.formatToolContent({
+                toolName: event.toolName,
+                status: "running",
+                args: existing?.args,
+              }),
+            })
+          ) - 1;
         const content = this.formatToolContent({
           toolName: event.toolName,
           status: "running",
           args: existing?.args,
           output: this.extractToolOutput(event.partialResult),
         });
-        this.messages[index] = { role: "tool", content };
+        this.applyMessageContent(this.messages[index], content);
         if (!existing) {
           this.toolCallEntries.set(event.toolCallId, {
             index,
@@ -256,21 +293,23 @@ export class TuiApp {
         const existing = this.toolCallEntries.get(event.toolCallId);
         const index =
           existing?.index ??
-          this.messages.push({
-            role: "tool",
-            content: this.formatToolContent({
-              toolName: event.toolName,
-              status: event.isError ? "error" : "done",
-              args: existing?.args,
-            }),
-          }) - 1;
+          this.messages.push(
+            this.createMessageEntry({
+              role: "tool",
+              content: this.formatToolContent({
+                toolName: event.toolName,
+                status: event.isError ? "error" : "done",
+                args: existing?.args,
+              }),
+            })
+          ) - 1;
         const content = this.formatToolContent({
           toolName: event.toolName,
           status: event.isError ? "error" : "done",
           args: existing?.args,
           output: this.extractToolOutput(event.result),
         });
-        this.messages[index] = { role: "tool", content };
+        this.applyMessageContent(this.messages[index], content);
         this.toolCallEntries.delete(event.toolCallId);
         if (this.isStreaming) {
           this.setStatus("Thinking...");
@@ -283,7 +322,8 @@ export class TuiApp {
       case "error": {
         this.isStreaming = false;
         const message = this.formatError(event.error);
-        this.messages.push({ role: "error", content: message });
+        const entry = this.createMessageEntry({ role: "error", content: message });
+        this.messages.push(entry);
         this.setStatus(`Error: ${message}`);
         this.render();
         break;
@@ -291,6 +331,93 @@ export class TuiApp {
       default:
         break;
     }
+  }
+
+  private createMessageEntry(message: DisplayMessage): MessageEntry {
+    const kind = this.kindForRole(message.role);
+    const entry: MessageEntry = {
+      id: `message-${this.messageId++}`,
+      role: message.role,
+      content: message.content,
+      kind,
+    };
+
+    if (!this.renderer || !this.scrollBox) {
+      return entry;
+    }
+
+    const container = new Box(this.renderer, {
+      id: entry.id,
+      width: "100%",
+      flexDirection: "column",
+      marginBottom: 1,
+    });
+
+    const label = new TruncatedText(this.renderer, {
+      width: "100%",
+      text: this.formatRoleLabel(message.role),
+    });
+
+    let body: TextBlock | MarkdownBlock;
+    if (kind === "markdown") {
+      body = new MarkdownBlock(this.renderer, {
+        content: "",
+        paddingX: 1,
+        paddingY: 0,
+        streaming: message.role === "assistant",
+      });
+    } else {
+      body = new TextBlock(this.renderer, {
+        text: "",
+        paddingX: 1,
+        paddingY: 0,
+      });
+    }
+
+    container.add(label);
+    container.add(body);
+    this.scrollBox.add(container);
+
+    entry.container = container;
+    entry.label = label;
+    entry.body = body;
+
+    this.applyMessageContent(entry, message.content);
+
+    return entry;
+  }
+
+  private applyMessageContent(entry: MessageEntry, content: string): void {
+    entry.content = content;
+    if (!entry.body) {
+      return;
+    }
+
+    if (entry.kind === "markdown" && entry.body instanceof MarkdownBlock) {
+      entry.body.setContent(content);
+      return;
+    }
+
+    if (entry.body instanceof TextBlock) {
+      entry.body.setText(this.formatTextBody(entry.role, content));
+    }
+  }
+
+  private kindForRole(role: string): MessageKind {
+    if (role === "assistant" || role === "user") {
+      return "markdown";
+    }
+    return "text";
+  }
+
+  private formatTextBody(role: string, content: string): string | StyledText {
+    if (role === "tool") {
+      return this.formatToolStyledText(content);
+    }
+    if (role === "error") {
+      return t`${fg("#cc6666")(content)}`;
+    }
+    return content;
   }
 
   private formatMessage(message: AgentMessage): DisplayMessage {
@@ -582,30 +709,16 @@ export class TuiApp {
     return text.split("\n").map((line) => `${indent}${line}`);
   }
 
-  private formatDisplayMessage(message: DisplayMessage): StyledText {
-    const role = message.role || "custom";
-    const roleLabel = this.formatRoleLabel(role);
-
-    if (role === "tool") {
-      const [header, ...rest] = message.content.split("\n");
-      const headerStyled = t`${fg("#7aa2b8")(header)}`;
-      const restStyled = this.formatToolBody(rest);
-      const separator = rest.length > 0 ? stringToStyledText("\n") : null;
-      return new StyledText([
-        ...roleLabel.chunks,
-        ...headerStyled.chunks,
-        ...(separator ? separator.chunks : []),
-        ...restStyled.chunks,
-      ]);
-    }
-
-    if (role === "error") {
-      const contentStyled = t`${fg("#cc6666")(message.content)}`;
-      return new StyledText([...roleLabel.chunks, ...contentStyled.chunks]);
-    }
-
-    const contentStyled = stringToStyledText(message.content);
-    return new StyledText([...roleLabel.chunks, ...contentStyled.chunks]);
+  private formatToolStyledText(content: string): StyledText {
+    const [header, ...rest] = content.split("\n");
+    const headerStyled = t`${fg("#7aa2b8")(header ?? "")}`;
+    const restStyled = this.formatToolBody(rest);
+    const separator = rest.length > 0 ? stringToStyledText("\n") : null;
+    return new StyledText([
+      ...headerStyled.chunks,
+      ...(separator ? separator.chunks : []),
+      ...restStyled.chunks,
+    ]);
   }
 
   private formatToolBody(lines: string[]): StyledText {
@@ -644,7 +757,7 @@ export class TuiApp {
 
   private formatRoleLabel(role: string): StyledText {
     const color = this.colorForRole(role);
-    return t`${dim("[")}${fg(color)(role)}${dim("]")} `;
+    return t`${dim("[")}${fg(color)(role)}${dim("]")}`;
   }
 
   private colorForRole(role: string): string {
@@ -693,7 +806,23 @@ export class TuiApp {
       return;
     }
 
+    const removed = this.messages.slice(0, removeCount);
+    for (const entry of removed) {
+      if (entry.container) {
+        this.scrollBox?.remove(entry.container.id);
+      }
+    }
+
     this.messages = this.messages.slice(removeCount);
+
+    if (this.currentAssistantIndex != null) {
+      if (this.currentAssistantIndex < removeCount) {
+        this.currentAssistantIndex = undefined;
+      } else {
+        this.currentAssistantIndex -= removeCount;
+      }
+    }
+
     const updated = new Map<string, { index: number; toolName: string; args: unknown }>();
     for (const [toolCallId, entry] of this.toolCallEntries.entries()) {
       const nextIndex = entry.index - removeCount;
@@ -719,25 +848,28 @@ export class TuiApp {
   }
 
   private setStatus(text: string): void {
-    if (this.statusView) {
-      this.statusView.content = text;
-      this.renderer?.requestRender();
+    if (this.statusText) {
+      this.statusText.setText(text);
+    }
+    this.updateStatusIndicator();
+    this.renderer?.requestRender();
+  }
+
+  private updateStatusIndicator(): void {
+    if (!this.statusLoader) {
+      return;
+    }
+    if (this.isStreaming) {
+      this.statusLoader.view.visible = true;
+      this.statusLoader.start();
+    } else {
+      this.statusLoader.view.visible = false;
+      this.statusLoader.stop();
     }
   }
 
   private render(): void {
-    if (!this.messagesView || !this.renderer) {
-      return;
-    }
     this.trimHistory();
-    const chunks = this.messages.flatMap((message, index) => {
-      const styled = this.formatDisplayMessage(message);
-      if (index === 0) {
-        return styled.chunks;
-      }
-      return [...stringToStyledText("\n\n").chunks, ...styled.chunks];
-    });
-    this.messagesView.content = new StyledText(chunks);
-    this.renderer.requestRender();
+    this.renderer?.requestRender();
   }
 }

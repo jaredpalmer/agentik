@@ -6,5 +6,5 @@
     "outDir": "dist"
   },
   "include": ["src"],
-  "references": [{ "path": "../agent-core" }, { "path": "../agent-sdk" }, { "path": "../tui" }]
+  "references": [{ "path": "../agent-core" }, { "path": "../agent-sdk" }]
 }

@@ -28,7 +28,7 @@ type ExecutableToolDefinition<INPUT, OUTPUT, UI> = AgentToolDefinition<INPUT, OU
 };
 
 function isAsyncIterable<OUTPUT, UI>(
-  value: ToolExecuteResult<OUTPUT, UI> | unknown
+  value: unknown
 ): value is AsyncIterable<AgentToolResult<OUTPUT, UI>> {
   return value != null && typeof value === "object" && Symbol.asyncIterator in value;
 }
@@ -148,9 +148,7 @@ function executeTool<INPUT, OUTPUT, UI>(
     return Promise.resolve(result)
       .then((resolved) => {
         const safeResult =
-          resolved == null
-            ? ({ output: undefined } as AgentToolResult<OUTPUT, UI>)
-            : resolved;
+          resolved == null ? ({ output: undefined } as AgentToolResult<OUTPUT, UI>) : resolved;
         uiByToolCallId.set(options.toolCallId, safeResult.ui);
         handlers?.onEnd?.({
           toolCallId: options.toolCallId,

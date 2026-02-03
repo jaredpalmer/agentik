@@ -2,7 +2,7 @@
 
 ## Goals
 
-- Build a pi-like agent system on top of AI SDK v6, preserving a strict split between core, SDK, and UI.
+- Build a pi-like agent system on top of AI SDK v6, preserving a strict split between core and SDK, with UI housed inside the CLI package.
 - Use Bun workspaces.
 - Wrap OpenTUI for the terminal UI layer.
 - Support subagents with shared memory and delegation, but keep it optional/feature-flagged.
@@ -20,13 +20,10 @@
   - Loads settings/auth, resources (skills/prompts/extensions), and session state.
   - Model resolution and fallback behavior.
 
-- `packages/tui`
-  - OpenTUI wrapper (renderer + components + input handling).
-  - Adapts `agent-core` events into TUI renderables.
-
 - `packages/coding-agent`
   - CLI with modes: interactive (TUI), print/JSON, and RPC.
   - Session management, command system, and tool wiring.
+  - Internal `src/tui/` module for OpenTUI renderables and input handling.
 
 ## Phases
 
@@ -51,6 +48,7 @@
 
 ### Phase 3: TUI (OpenTUI Wrapper)
 
+- Implemented inside `packages/coding-agent/src/tui/`.
 - Renderer bootstrap, message list, input/editor.
 - Event stream to renderable mapping.
 - Overlays, status/footer, and keybindings.

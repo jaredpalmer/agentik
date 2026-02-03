@@ -11,7 +11,7 @@ import {
   type AgentToolDefinition,
 } from "@openagent/agent-core";
 import { createAgentSession } from "@openagent/agent-sdk";
-import { TuiApp } from "@openagent/tui";
+import { TuiApp } from "./tui/tui-app";
 import { pathToFileURL } from "node:url";
 
 type CliMode = "interactive" | "print" | "rpc";
