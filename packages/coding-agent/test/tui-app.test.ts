@@ -53,4 +53,17 @@ describe("TuiApp", () => {
     const messages = app.messages;
     expect(messages[0]?.content).toBe("Stack: boom");
   });
+
+  it("suppresses abort errors when interrupting", () => {
+    const app = createApp() as unknown as TestableApp & { isAborting: boolean };
+    const handleEvent = app.handleEvent.bind(app);
+
+    const error = new Error("aborted");
+    error.name = "AbortError";
+    app.isAborting = true;
+
+    handleEvent({ type: "error", error });
+
+    expect(app.messages.length).toBe(0);
+  });
 });

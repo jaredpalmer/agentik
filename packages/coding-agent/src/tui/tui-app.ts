@@ -58,6 +58,12 @@ export class TuiApp {
     }
     this.shutdown({ destroyRenderer: false });
   };
+  private abortController?: AbortController;
+  private isAborting = false;
+  private lastCtrlCAt?: number;
+  private exitHintTimeout?: ReturnType<typeof setTimeout>;
+  private exitHintActive = false;
+  private static readonly exitHintText = "Press Ctrl+C again to exit";
 
   constructor(options: TuiAppOptions) {
     this.runtime = options.runtime;
@@ -68,7 +74,7 @@ export class TuiApp {
       return;
     }
     this.isStopped = false;
-    this.renderer = await createCliRenderer({ exitOnCtrlC: true });
+    this.renderer = await createCliRenderer({ exitOnCtrlC: false });
     this.renderer.on(CliRenderEvents.DESTROY, this.handleRendererDestroy);
     this.root = new Box(this.renderer, {
       id: "root",
@@ -145,19 +151,41 @@ export class TuiApp {
         return;
       }
       this.isStreaming = true;
+      this.clearExitHint();
       this.setStatus("Thinking...");
       if (this.input) {
         this.input.value = "";
       }
-      void this.runtime.prompt(trimmed).catch((error) => {
-        console.error("Prompt failed:", error);
-        this.isStreaming = false;
-        this.setStatus(`Error: ${this.formatError(error)}`);
-        this.render();
-      });
+      this.abortController?.abort();
+      this.abortController = new AbortController();
+      void this.runtime
+        .prompt(trimmed, { abortSignal: this.abortController.signal })
+        .catch((error) => {
+          if (this.isAbortError(error)) {
+            return;
+          }
+          console.error("Prompt failed:", error);
+          this.isStreaming = false;
+          this.setStatus(`Error: ${this.formatError(error)}`);
+          this.render();
+        });
     });
     this.renderer.on("resize", () => this.render());
     this.renderer.keyInput.on("keypress", (key) => {
+      if (key.name === "c" && key.ctrl) {
+        key.preventDefault();
+        key.stopPropagation();
+        this.handleCtrlC();
+        return;
+      }
+      if (key.name === "escape") {
+        if (this.isStreaming) {
+          key.preventDefault();
+          key.stopPropagation();
+          this.interruptCurrentResponse("Esc");
+        }
+        return;
+      }
       if (!this.scrollBox) {
         return;
       }
@@ -184,6 +212,8 @@ export class TuiApp {
       return;
     }
     this.isStopped = true;
+    this.abortController?.abort();
+    this.abortController = undefined;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.statusLoader?.destroy();
@@ -204,22 +234,34 @@ export class TuiApp {
     this.currentAssistantIndex = undefined;
     this.isStreaming = false;
     this.toolCallEntries.clear();
+    if (this.exitHintTimeout) {
+      clearTimeout(this.exitHintTimeout);
+      this.exitHintTimeout = undefined;
+    }
+    this.exitHintActive = false;
   }
 
   private handleEvent(event: AgentEvent): void {
+    if (this.isStopped) {
+      return;
+    }
     switch (event.type) {
       case "agent_start": {
         this.isStreaming = true;
+        this.clearExitHint();
         this.setStatus("Thinking...");
         break;
       }
       case "agent_end": {
         this.isStreaming = false;
+        this.isAborting = false;
+        this.abortController = undefined;
         this.setStatus("Ready");
         break;
       }
       case "turn_start": {
         this.isStreaming = true;
+        this.clearExitHint();
         this.setStatus("Thinking...");
         break;
       }
@@ -241,6 +283,9 @@ export class TuiApp {
         break;
       }
       case "message_update": {
+        if (this.isAborting) {
+          break;
+        }
         if (this.currentAssistantIndex != null) {
           const entry = this.messages[this.currentAssistantIndex];
           entry.content += event.delta;
@@ -353,6 +398,14 @@ export class TuiApp {
         break;
       }
       case "error": {
+        if (this.isAborting && this.isAbortError(event.error)) {
+          this.isAborting = false;
+          this.abortController = undefined;
+          this.isStreaming = false;
+          this.setStatus("Ready");
+          this.render();
+          break;
+        }
         this.isStreaming = false;
         const message = this.formatError(event.error);
         const entry = this.createMessageEntry({ role: "error", content: message });
@@ -891,11 +944,83 @@ export class TuiApp {
   }
 
   private setStatus(text: string): void {
+    const nextText = this.exitHintActive && text === "Ready" ? TuiApp.exitHintText : text;
     if (this.statusText) {
-      this.statusText.setText(text);
+      this.statusText.setText(nextText);
     }
     this.updateStatusIndicator();
     this.renderer?.requestRender();
+  }
+
+  private setExitHint(): void {
+    this.exitHintActive = true;
+    if (this.exitHintTimeout) {
+      clearTimeout(this.exitHintTimeout);
+    }
+    this.setStatus(TuiApp.exitHintText);
+    this.exitHintTimeout = setTimeout(() => {
+      this.exitHintActive = false;
+      this.exitHintTimeout = undefined;
+      if (!this.isStreaming) {
+        this.setStatus("Ready");
+      }
+    }, 2000);
+  }
+
+  private clearExitHint(): void {
+    if (!this.exitHintActive) {
+      return;
+    }
+    this.exitHintActive = false;
+    if (this.exitHintTimeout) {
+      clearTimeout(this.exitHintTimeout);
+      this.exitHintTimeout = undefined;
+    }
+  }
+
+  private handleCtrlC(): void {
+    const now = Date.now();
+    if (this.lastCtrlCAt && now - this.lastCtrlCAt <= 2000) {
+      this.shutdown({ destroyRenderer: true });
+      process.exit(0);
+    }
+    this.lastCtrlCAt = now;
+    this.setExitHint();
+    if (this.isStreaming) {
+      this.interruptCurrentResponse("Ctrl+C");
+    }
+  }
+
+  private interruptCurrentResponse(reason: "Ctrl+C" | "Esc"): void {
+    if (!this.isStreaming || this.isAborting) {
+      return;
+    }
+    this.isAborting = true;
+    this.abortController?.abort();
+    this.abortController = undefined;
+    this.isStreaming = false;
+    this.currentAssistantIndex = undefined;
+    const entry = this.createMessageEntry({
+      role: "system",
+      content: reason === "Ctrl+C" ? "Interrupted (Ctrl+C)" : "Interrupted (Esc)",
+    });
+    this.messages.push(entry);
+    this.setStatus("Ready");
+    this.render();
+  }
+
+  private isAbortError(error: unknown): boolean {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const record = error as { name?: string; message?: string };
+    if (record.name === "AbortError") {
+      return true;
+    }
+    if (typeof record.message === "string" && record.message.toLowerCase().includes("abort")) {
+      return true;
+    }
+    return false;
   }
 
   private updateStatusIndicator(): void {
