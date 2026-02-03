@@ -28,3 +28,21 @@ npx opensrc <owner>/<repo>      # GitHub repo (e.g., npx opensrc vercel/ai)
 ```
 
 <!-- opensrc:end -->
+
+## Skills
+
+- compound-docs: Capture solved problems as categorized documentation with YAML frontmatter for fast lookup. (file: .agent/skills/compound-docs/SKILL.md)
+- find-skills: Discover and install agent skills from the skills ecosystem. (file: .agent/skills/find-skills/SKILL.md)
+
+## Commands
+
+- review-pr: Comprehensive PR review using specialized agents. (file: .agent/commands/review-pr.md)
+
+## Agents
+
+- code-reviewer: Review code for project guidelines, style, and best practices. (file: .agent/agents/code-reviewer.md)
+- code-simplifier: Simplify recently modified code for clarity and maintainability. (file: .agent/agents/code-simplifier.md)
+- comment-analyzer: Analyze comments for accuracy and maintainability. (file: .agent/agents/comment-analyzer.md)
+- pr-test-analyzer: Review test coverage quality in PRs. (file: .agent/agents/pr-test-analyzer.md)
+- silent-failure-hunter: Find silent failures and error handling issues. (file: .agent/agents/silent-failure-hunter.md)
+- type-design-analyzer: Analyze type design and invariants. (file: .agent/agents/type-design-analyzer.md)
