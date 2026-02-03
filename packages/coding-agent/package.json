@@ -17,6 +17,7 @@
   "dependencies": {
     "@openagent/agent-core": "workspace:*",
     "@openagent/agent-sdk": "workspace:*",
-    "@openagent/tui": "workspace:*"
+    "@openagent/tui": "workspace:*",
+    "ai": "^6.0.68"
   }
 }

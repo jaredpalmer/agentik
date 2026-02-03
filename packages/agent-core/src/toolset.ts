@@ -1,7 +1,7 @@
 import { tool } from "@ai-sdk/provider-utils";
 import type { Tool as AiTool, ToolExecutionOptions } from "@ai-sdk/provider-utils";
 import type { ToolSet } from "ai";
-import type { AgentToolDefinition, AgentToolResult } from "./types";
+import type { AgentToolDefinition, AgentToolExecuteFunction, AgentToolResult } from "./types";
 
 export type ToolEventHandlers = {
   onStart?: (options: { toolCallId: string; toolName: string; input: unknown }) => void;
@@ -18,12 +18,18 @@ export type ToolEventHandlers = {
   }) => void;
 };
 
-type ToolExecuteResult =
-  | AgentToolResult
-  | PromiseLike<AgentToolResult>
-  | AsyncIterable<AgentToolResult>;
+type ToolExecuteResult<OUTPUT, UI> =
+  | AgentToolResult<OUTPUT, UI>
+  | PromiseLike<AgentToolResult<OUTPUT, UI>>
+  | AsyncIterable<AgentToolResult<OUTPUT, UI>>;
 
-function isAsyncIterable(value: unknown): value is AsyncIterable<AgentToolResult> {
+type ExecutableToolDefinition<INPUT, OUTPUT, UI> = AgentToolDefinition<INPUT, OUTPUT, UI> & {
+  execute: AgentToolExecuteFunction<INPUT, OUTPUT, UI>;
+};
+
+function isAsyncIterable<OUTPUT, UI>(
+  value: ToolExecuteResult<OUTPUT, UI> | unknown
+): value is AsyncIterable<AgentToolResult<OUTPUT, UI>> {
   return value != null && typeof value === "object" && Symbol.asyncIterator in value;
 }
 
@@ -37,39 +43,75 @@ export function createToolSet(tools: AgentToolDefinition[], handlers?: ToolEvent
   return toolSet;
 }
 
-function buildTool(definition: AgentToolDefinition, handlers?: ToolEventHandlers): AiTool {
-  const uiByToolCallId = new Map<string, unknown>();
+function buildTool<INPUT, OUTPUT, UI>(
+  definition: AgentToolDefinition<INPUT, OUTPUT, UI>,
+  handlers?: ToolEventHandlers
+): AiTool<INPUT, OUTPUT> {
+  const uiByToolCallId = new Map<string, UI | undefined>();
 
-  return tool({
+  const toModelOutput = definition.toModelOutput;
+
+  const base = {
     description: definition.description,
     title: definition.title,
     inputSchema: definition.inputSchema,
-    outputSchema: definition.outputSchema,
     needsApproval: definition.needsApproval,
     providerOptions: definition.providerOptions,
     strict: definition.strict,
-    execute: definition.execute
-      ? (input, options) => executeTool(definition, input, options, handlers, uiByToolCallId)
-      : undefined,
-    toModelOutput: definition.toModelOutput
-      ? ({ toolCallId, input, output }) =>
-          definition.toModelOutput?.({
+    toModelOutput: toModelOutput
+      ? ({
+          toolCallId,
+          input,
+          output,
+        }: {
+          toolCallId: string;
+          input: [INPUT] extends [never] ? unknown : INPUT;
+          output: OUTPUT;
+        }) =>
+          toModelOutput({
             toolCallId,
             input,
             output,
             ui: uiByToolCallId.get(toolCallId),
           })
       : undefined,
-  });
+  };
+
+  if (definition.execute) {
+    const withExecute = {
+      ...base,
+      ...(definition.outputSchema ? { outputSchema: definition.outputSchema } : {}),
+      execute: (input: INPUT, options: ToolExecutionOptions) =>
+        executeTool(
+          definition as ExecutableToolDefinition<INPUT, OUTPUT, UI>,
+          input,
+          options,
+          handlers,
+          uiByToolCallId
+        ),
+    };
+
+    return tool(withExecute as AiTool);
+  }
+
+  const outputSchema = definition.outputSchema;
+  if (!outputSchema) {
+    throw new Error(`Tool ${definition.name} must define outputSchema when execute is not set.`);
+  }
+
+  return tool({
+    ...base,
+    outputSchema,
+  } as AiTool);
 }
 
-async function executeTool(
-  definition: AgentToolDefinition,
-  input: unknown,
+function executeTool<INPUT, OUTPUT, UI>(
+  definition: ExecutableToolDefinition<INPUT, OUTPUT, UI>,
+  input: INPUT,
   options: ToolExecutionOptions,
   handlers: ToolEventHandlers | undefined,
-  uiByToolCallId: Map<string, unknown>
-): Promise<unknown> {
+  uiByToolCallId: Map<string, UI | undefined>
+): AsyncIterable<OUTPUT> | PromiseLike<OUTPUT> | OUTPUT {
   handlers?.onStart?.({
     toolCallId: options.toolCallId,
     toolName: definition.name,
@@ -77,11 +119,11 @@ async function executeTool(
   });
 
   try {
-    const result = definition.execute?.(input, options) as ToolExecuteResult;
+    const result = definition.execute(input, options) as ToolExecuteResult<OUTPUT, UI>;
 
     if (isAsyncIterable(result)) {
       return (async function* () {
-        let lastPartial: AgentToolResult | undefined;
+        let lastPartial: AgentToolResult<OUTPUT, UI> | undefined;
         for await (const partial of result) {
           lastPartial = partial;
           uiByToolCallId.set(options.toolCallId, partial.ui);
@@ -103,17 +145,30 @@ async function executeTool(
       })();
     }
 
-    const resolved = await result;
-    const safeResult = resolved == null ? ({ output: undefined } as AgentToolResult) : resolved;
-    uiByToolCallId.set(options.toolCallId, safeResult.ui);
-    handlers?.onEnd?.({
-      toolCallId: options.toolCallId,
-      toolName: definition.name,
-      result: safeResult,
-      isError: false,
-    });
-
-    return safeResult.output;
+    return Promise.resolve(result)
+      .then((resolved) => {
+        const safeResult =
+          resolved == null
+            ? ({ output: undefined } as AgentToolResult<OUTPUT, UI>)
+            : resolved;
+        uiByToolCallId.set(options.toolCallId, safeResult.ui);
+        handlers?.onEnd?.({
+          toolCallId: options.toolCallId,
+          toolName: definition.name,
+          result: safeResult,
+          isError: false,
+        });
+        return safeResult.output;
+      })
+      .catch((error) => {
+        handlers?.onEnd?.({
+          toolCallId: options.toolCallId,
+          toolName: definition.name,
+          result: { output: error },
+          isError: true,
+        });
+        throw error;
+      });
   } catch (error) {
     handlers?.onEnd?.({
       toolCallId: options.toolCallId,

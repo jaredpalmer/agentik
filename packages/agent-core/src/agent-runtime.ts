@@ -173,7 +173,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         },
       });
 
-      const agent = new ToolLoopAgent({
+      const agent = new ToolLoopAgent<CALL_OPTIONS, ToolSet>({
         model: this.stateInternal.model,
         tools: toolSet,
         instructions: this.stateInternal.instructions,
@@ -186,7 +186,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
 
       const result = await agent.stream({
         messages: modelMessages,
-        options: options.options as CALL_OPTIONS,
+        ...(options.options === undefined ? {} : { options: options.options as CALL_OPTIONS }),
         abortSignal: options.abortSignal,
         timeout: options.timeout,
         experimental_transform: this.experimental_transform,

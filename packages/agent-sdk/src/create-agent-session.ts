@@ -1,7 +1,7 @@
 import type { ModelMessage, ProviderOptions, SystemModelMessage } from "@ai-sdk/provider-utils";
 import type { AgentRuntimeOptions, AgentMessage, AgentToolDefinition } from "@openagent/agent-core";
 import { AgentRuntime } from "@openagent/agent-core";
-import type { CallSettings, LanguageModel, StopCondition, ToolChoice } from "ai";
+import type { CallSettings, LanguageModel, StopCondition, ToolChoice, ToolSet } from "ai";
 import { AgentSession } from "./agent-session";
 import type { SessionStore } from "./session-store";
 
@@ -9,8 +9,8 @@ export type CreateAgentSessionOptions = {
   model: LanguageModel;
   instructions?: string | SystemModelMessage | Array<SystemModelMessage>;
   tools?: AgentToolDefinition[];
-  toolChoice?: ToolChoice<Record<string, unknown>>;
-  stopWhen?: StopCondition<Record<string, unknown>> | Array<StopCondition<Record<string, unknown>>>;
+  toolChoice?: ToolChoice<ToolSet>;
+  stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
   output?: unknown;
   providerOptions?: ProviderOptions;
   callSettings?: CallSettings;

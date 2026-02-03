@@ -13,7 +13,8 @@
     "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "clean": "rm -rf packages/*/dist"
+    "clean": "rm -rf packages/*/dist",
+    "test": "bun run build && bun test ./packages"
   },
   "devDependencies": {
     "@types/node": "^20.17.24",

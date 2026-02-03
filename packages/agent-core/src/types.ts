@@ -6,7 +6,7 @@ import type {
   ToolNeedsApprovalFunction,
   ToolResultOutput,
 } from "@ai-sdk/provider-utils";
-import type { CallSettings, LanguageModel, StopCondition, ToolChoice } from "ai";
+import type { CallSettings, LanguageModel, StopCondition, ToolChoice, ToolSet } from "ai";
 
 export interface CustomAgentMessages {}
 
@@ -33,24 +33,42 @@ export type AgentToolExecuteFunction<INPUT, OUTPUT, UI = unknown> = (
   | PromiseLike<AgentToolResult<OUTPUT, UI>>
   | AsyncIterable<AgentToolResult<OUTPUT, UI>>;
 
-export type AgentToolDefinition<INPUT = unknown, OUTPUT = unknown, UI = unknown> = {
+type AgentToolDefinitionBase<INPUT, OUTPUT, UI> = {
   name: string;
   description?: string;
   title?: string;
   label?: string;
   inputSchema: FlexibleSchema<INPUT>;
-  outputSchema?: FlexibleSchema<OUTPUT>;
-  needsApproval?: boolean | ToolNeedsApprovalFunction<INPUT>;
-  execute?: AgentToolExecuteFunction<INPUT, OUTPUT, UI>;
+  needsApproval?:
+    | boolean
+    | ToolNeedsApprovalFunction<[INPUT] extends [never] ? unknown : INPUT>;
   toModelOutput?: (options: {
     toolCallId: string;
-    input: INPUT;
+    input: [INPUT] extends [never] ? unknown : INPUT;
     output: OUTPUT;
     ui?: UI;
   }) => ToolResultOutput | PromiseLike<ToolResultOutput>;
   providerOptions?: ProviderOptions;
   strict?: boolean;
 };
+
+type AgentToolOutputConfig<INPUT, OUTPUT, UI> = [OUTPUT] extends [never]
+  ? {
+      execute?: never;
+      outputSchema?: never;
+    }
+  :
+      | {
+          execute: AgentToolExecuteFunction<INPUT, OUTPUT, UI>;
+          outputSchema?: FlexibleSchema<OUTPUT>;
+        }
+      | {
+          execute?: never;
+          outputSchema: FlexibleSchema<OUTPUT>;
+        };
+
+export type AgentToolDefinition<INPUT = unknown, OUTPUT = unknown, UI = unknown> =
+  AgentToolDefinitionBase<INPUT, OUTPUT, UI> & AgentToolOutputConfig<INPUT, OUTPUT, UI>;
 
 export interface AgentState {
   instructions?: string | SystemModelMessage | Array<SystemModelMessage>;
@@ -98,8 +116,8 @@ export type AgentRuntimeOptions = {
   model: LanguageModel;
   instructions?: string | SystemModelMessage | Array<SystemModelMessage>;
   tools?: AgentToolDefinition[];
-  toolChoice?: ToolChoice<Record<string, unknown>>;
-  stopWhen?: StopCondition<Record<string, unknown>> | Array<StopCondition<Record<string, unknown>>>;
+  toolChoice?: ToolChoice<ToolSet>;
+  stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
   output?: unknown;
   providerOptions?: ProviderOptions;
   callSettings?: CallSettings;
