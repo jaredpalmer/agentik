@@ -2,20 +2,20 @@
 
 ## Goals
 
-- Build a pi-like agent system on top of AI SDK v6, preserving a strict split between core and SDK, with UI housed inside the CLI package.
+- Build a pi-like agent system on top of AI SDK v6, preserving a strict split between agent and SDK, with UI housed inside the CLI package.
 - Use Bun workspaces.
 - Wrap OpenTUI for the terminal UI layer.
 - Support subagents with shared memory and delegation, but keep it optional/feature-flagged.
 
 ## Architecture (Packages)
 
-- `packages/agent-core`
+- `packages/agent`
   - AI SDK v6 runtime wrapper (ToolLoopAgent + event model).
   - Tool registry, tool execution policies, and streaming event bus.
   - Session tree format (pi-style JSONL) and compaction hooks.
   - Subagent manager (optional) with shared-memory access rules.
 
-- `packages/agent-sdk`
+- `packages/sdk`
   - `createAgentSession` and embedding API (pi-style `sdk.ts`).
   - Loads settings/auth, resources (skills/prompts/extensions), and session state.
   - Model resolution and fallback behavior.
@@ -33,14 +33,14 @@
 - Add package scaffolds with `src/index.ts` placeholders.
 - Wire basic build/typecheck scripts.
 
-### Phase 1: Agent-Core (AI SDK v6)
+### Phase 1: Agent (AI SDK v6)
 
 - Define `AgentMessage`, `AgentEvent`, and session tree.
 - Implement AI SDK v6 `ToolLoopAgent` wrapper.
 - Add tool registry + execution policies + event emission.
 - Add compaction hooks and context transformers.
 
-### Phase 2: Agent-SDK
+### Phase 2: SDK
 
 - Implement `createAgentSession` entrypoint.
 - Resource loading (skills/prompts/extensions), settings/auth.

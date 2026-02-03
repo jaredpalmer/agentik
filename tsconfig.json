@@ -2,10 +2,10 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/agent-core"
+      "path": "./packages/agent"
     },
     {
-      "path": "./packages/agent-sdk"
+      "path": "./packages/sdk"
     },
     {
       "path": "./packages/coding-agent"

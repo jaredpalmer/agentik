@@ -1,6 +1,6 @@
 import type { ModelMessage, ProviderOptions, SystemModelMessage } from "@ai-sdk/provider-utils";
-import type { AgentRuntimeOptions, AgentMessage, AgentToolDefinition } from "@agentik/agent-core";
-import { AgentRuntime } from "@agentik/agent-core";
+import type { AgentRuntimeOptions, AgentMessage, AgentToolDefinition } from "@agentik/agent";
+import { AgentRuntime } from "@agentik/agent";
 import type { CallSettings, LanguageModel, StopCondition, ToolChoice, ToolSet } from "ai";
 import { AgentSession } from "./agent-session";
 import type { SessionStore } from "./session-store";

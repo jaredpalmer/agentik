@@ -1,5 +1,5 @@
 {
-  "name": "@agentik/agent-core",
+  "name": "@agentik/sdk",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@agentik/agent": "workspace:*",
     "@ai-sdk/provider-utils": "^4.0.13",
-    "ai": "^6.0.68",
-    "glob": "^10.3.10"
+    "ai": "^6.0.68"
   }
 }

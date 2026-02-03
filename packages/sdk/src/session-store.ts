@@ -1,4 +1,4 @@
-import type { SessionEntry, SessionTree } from "@agentik/agent-core";
+import type { SessionEntry, SessionTree } from "@agentik/agent";
 
 export interface SessionStore {
   load(): Promise<SessionTree>;

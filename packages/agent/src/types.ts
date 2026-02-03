@@ -39,9 +39,7 @@ type AgentToolDefinitionBase<INPUT, OUTPUT, UI> = {
   title?: string;
   label?: string;
   inputSchema: FlexibleSchema<INPUT>;
-  needsApproval?:
-    | boolean
-    | ToolNeedsApprovalFunction<[INPUT] extends [never] ? unknown : INPUT>;
+  needsApproval?: boolean | ToolNeedsApprovalFunction<[INPUT] extends [never] ? unknown : INPUT>;
   toModelOutput?: (options: {
     toolCallId: string;
     input: [INPUT] extends [never] ? unknown : INPUT;
@@ -67,8 +65,11 @@ type AgentToolOutputConfig<INPUT, OUTPUT, UI> = [OUTPUT] extends [never]
           outputSchema: FlexibleSchema<OUTPUT>;
         };
 
-export type AgentToolDefinition<INPUT = unknown, OUTPUT = unknown, UI = unknown> =
-  AgentToolDefinitionBase<INPUT, OUTPUT, UI> & AgentToolOutputConfig<INPUT, OUTPUT, UI>;
+export type AgentToolDefinition<
+  INPUT = unknown,
+  OUTPUT = unknown,
+  UI = unknown,
+> = AgentToolDefinitionBase<INPUT, OUTPUT, UI> & AgentToolOutputConfig<INPUT, OUTPUT, UI>;
 
 export interface AgentState {
   instructions?: string | SystemModelMessage | Array<SystemModelMessage>;

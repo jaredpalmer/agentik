@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { MockLanguageModelV3 } from "ai/test";
 import { convertArrayToReadableStream } from "@ai-sdk/provider-utils/test";
-import { AgentRuntime } from "../../agent-core/src/agent-runtime";
+import { AgentRuntime } from "../../agent/src/agent-runtime";
 import { AgentSession } from "../src/agent-session";
 
 function createMockModel(responseText: string) {

@@ -9,8 +9,8 @@ import {
   createWebFetchTool,
   createWriteTool,
   type AgentToolDefinition,
-} from "@agentik/agent-core";
-import { createAgentSession } from "@agentik/agent-sdk";
+} from "@agentik/agent";
+import { createAgentSession } from "@agentik/sdk";
 import { TuiApp } from "./tui/tui-app";
 import { pathToFileURL } from "node:url";
 
