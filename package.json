@@ -6,12 +6,20 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "lefthook install",
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
+    "lint": "oxlint --type-aware",
+    "lint:fix": "oxlint --type-aware --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "clean": "rm -rf packages/*/dist"
   },
   "devDependencies": {
     "@types/node": "^20.17.24",
+    "oxfmt": "^0.23.0",
+    "oxlint": "^1.38.0",
+    "oxlint-tsgolint": "^0.10.0",
     "typescript": "^5.8.3"
   }
 }

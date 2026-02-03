@@ -1,2 +1,6 @@
 # opensrc - source code for packages
 opensrc/
+node_modules
+dist
+build
+tsconfig.tsbuildinfo
