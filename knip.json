@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "ignoreWorkspaces": ["."],
+  "rules": {
+    "exports": "off",
+    "types": "off"
+  },
+  "workspaces": {
+    "packages/*": {
+      "entry": ["src/{index,cli,main}.{js,ts,tsx,mts,cts}", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "ignoreBinaries": ["tsc"]
+    }
+  }
+}

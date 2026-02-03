@@ -38,6 +38,10 @@ npx opensrc <owner>/<repo>      # GitHub repo (e.g., npx opensrc vercel/ai)
 
 - review-pr: Comprehensive PR review using specialized agents. (file: .agent/commands/review-pr.md)
 
+## Tooling
+
+- knip: Run `bun run knip` to report unused files/exports/dependencies (config: `knip.json`, ignores `opensrc/`, includes tests).
+
 ## Agents
 
 - code-reviewer: Review code for project guidelines, style, and best practices. (file: .agent/agents/code-reviewer.md)

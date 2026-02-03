@@ -18,7 +18,6 @@
     "@ai-sdk/anthropic": "^3.0.35",
     "@openagent/agent-core": "workspace:*",
     "@openagent/agent-sdk": "workspace:*",
-    "@opentui/core": "^0.1.77",
-    "ai": "^6.0.68"
+    "@opentui/core": "^0.1.77"
   }
 }

@@ -14,11 +14,13 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "clean": "rm -rf packages/*/dist",
+    "knip": "knip",
     "test": "bun run build && bun test ./packages"
   },
   "devDependencies": {
     "@types/bun": "^1.2.1",
     "@types/node": "^20.17.24",
+    "knip": "^5.83.0",
     "lefthook": "^2.1.0",
     "oxfmt": "^0.23.0",
     "oxlint": "^1.38.0",
