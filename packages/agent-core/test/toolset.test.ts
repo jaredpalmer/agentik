@@ -59,14 +59,12 @@ describe("toolset", () => {
       execute: (
         input: unknown,
         options: { toolCallId: string; messages: [] }
-      ) =>
-        | AsyncIterable<{ output: string; ui?: string }>
-        | Promise<AsyncIterable<{ output: string; ui?: string }>>;
+      ) => AsyncIterable<string> | Promise<AsyncIterable<string>>;
     };
     const output: string[] = [];
     const result = await tool.execute({}, { toolCallId: "call-2", messages: [] });
     for await (const chunk of result) {
-      output.push(chunk.output);
+      output.push(chunk);
     }
 
     expect(updates).toEqual(["step-1", "step-2"]);

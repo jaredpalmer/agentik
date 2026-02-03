@@ -47,3 +47,7 @@ npx opensrc <owner>/<repo>      # GitHub repo (e.g., npx opensrc vercel/ai)
 ## Tooling
 
 - knip: Run `bun run knip` to report unused files/exports/dependencies (config: `knip.json`, ignores `opensrc/`, includes tests).
+
+## Final Thoughts
+
+IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any AI SDK tasks.

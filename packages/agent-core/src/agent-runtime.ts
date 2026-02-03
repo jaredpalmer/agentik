@@ -152,14 +152,28 @@ export class AgentRuntime<CALL_OPTIONS = never> {
       const modelMessages = await this.convertToModelMessages(context);
 
       const endedToolCalls = new Set<string>();
+      const startedToolCalls = new Set<string>();
+      const emitToolExecutionStart = (options: {
+        toolCallId?: string;
+        toolName?: string;
+        args: unknown;
+      }) => {
+        if (options.toolCallId && startedToolCalls.has(options.toolCallId)) {
+          return;
+        }
+        if (options.toolCallId) {
+          startedToolCalls.add(options.toolCallId);
+        }
+        this.emit({
+          type: "tool_execution_start",
+          toolCallId: options.toolCallId ?? "",
+          toolName: options.toolName ?? "unknown",
+          args: options.args,
+        });
+      };
       const toolSet = createToolSet(this.stateInternal.tools, {
         onStart: ({ toolCallId, toolName, input }) => {
-          this.emit({
-            type: "tool_execution_start",
-            toolCallId,
-            toolName,
-            args: input,
-          });
+          emitToolExecutionStart({ toolCallId, toolName, args: input });
         },
         onUpdate: ({ toolCallId, toolName, partialResult }) => {
           this.emit({
@@ -243,10 +257,9 @@ export class AgentRuntime<CALL_OPTIONS = never> {
             }
             break;
           case "tool-call":
-            this.emit({
-              type: "tool_execution_start",
-              toolCallId: streamPart.toolCallId ?? "",
-              toolName: streamPart.toolName ?? "unknown",
+            emitToolExecutionStart({
+              toolCallId: streamPart.toolCallId,
+              toolName: streamPart.toolName,
               args: streamPart.input,
             });
             break;

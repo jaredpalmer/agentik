@@ -62,6 +62,11 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   session.runtime.subscribe((event) => {
     if (event.type === "message_update") {
       process.stdout.write(event.delta);
+      return;
+    }
+    if (event.type === "error") {
+      const message = formatRuntimeError(event.error);
+      process.stderr.write(`\nError during streaming: ${message}\n`);
     }
   });
 
@@ -84,6 +89,27 @@ function getArgValue(argv: string[], name: string): string | undefined {
     return undefined;
   }
   return argv[index + 1];
+}
+
+function formatRuntimeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error == null) {
+    return "Unknown error";
+  }
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch {
+    try {
+      return String(error);
+    } catch {
+      return "Unknown error";
+    }
+  }
 }
 
 const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;

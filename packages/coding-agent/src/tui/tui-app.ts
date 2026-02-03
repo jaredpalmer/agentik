@@ -834,16 +834,23 @@ export class TuiApp {
   }
 
   private formatError(error: unknown): string {
-    if (error instanceof Error && error.message) {
-      return error.message;
+    if (error instanceof Error) {
+      return error.stack ?? error.message ?? "Unknown error";
     }
     if (typeof error === "string") {
       return error;
     }
+    if (error == null) {
+      return "Unknown error";
+    }
     try {
       return JSON.stringify(error, null, 2);
     } catch {
-      return "Unknown error";
+      try {
+        return String(error);
+      } catch {
+        return "Unknown error";
+      }
     }
   }
 
