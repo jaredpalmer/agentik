@@ -15,6 +15,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@openagent/agent-core": "workspace:*"
+    "@openagent/agent-core": "workspace:*",
+    "@ai-sdk/provider-utils": "^4.0.13",
+    "ai": "^6.0.68"
   }
 }
