@@ -1,6 +1,6 @@
 # Agentik
 
-A modular AI coding agent and SDK.
+Agentik’s goal is to make building coding agents feel boring and composable: a small, deterministic runtime, a higher-level SDK for sessions and policy, and a minimal CLI that acts as a reference client. You can embed the SDK in your own product, or use the runtime directly when you want full control without CLI assumptions.
 
 **Packages**
 
@@ -29,6 +29,10 @@ runtime.subscribe((event) => {
 
 await runtime.prompt("Summarize the README.");
 ```
+
+**Separation of concerns**
+
+The runtime is intentionally “dumb” and deterministic: it runs the loop, executes tools, and emits events. The SDK is where environment-specific policy lives: model selection and fallbacks, resource loading, session storage/restore, and app-level wiring. This keeps the runtime reusable and testable, while the SDK stays flexible for different products and integrations.
 
 ## SDK
 
