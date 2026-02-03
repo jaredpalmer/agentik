@@ -41,6 +41,8 @@ export class TuiApp {
   private statusBar?: Box;
   private statusText?: TruncatedText;
   private statusLoader?: Loader;
+  private queuedBox?: Box;
+  private queuedText?: TextBlock;
   private input?: InputField;
   private messages: MessageEntry[] = [];
   private messageId = 0;
@@ -52,6 +54,7 @@ export class TuiApp {
   private toolCallEntries = new Map<string, { index: number; toolName: string; args: unknown }>();
   private maxHistoryLines = 2000;
   private isStopped = false;
+  private queuedMessages: Array<{ mode: "steering" | "follow-up"; content: string }> = [];
   private handleRendererDestroy = () => {
     if (this.isStopped) {
       return;
@@ -64,6 +67,7 @@ export class TuiApp {
   private exitHintTimeout?: ReturnType<typeof setTimeout>;
   private exitHintActive = false;
   private static readonly exitHintText = "Press Ctrl+C again to exit";
+  private static readonly queueHintText = "";
 
   constructor(options: TuiAppOptions) {
     this.runtime = options.runtime;
@@ -114,14 +118,29 @@ export class TuiApp {
       frameColor: "#7aa2b8",
       messageColor: "#9aa0a6",
     });
-    this.statusLoader.view.visible = false;
     this.statusLoader.stop();
+    this.statusLoader.view.visible = false;
+    this.statusLoader.view.content = "";
     this.statusText = new TruncatedText(this.renderer, {
-      text: "Ready",
+      text: TuiApp.queueHintText,
       flexGrow: 1,
     });
     this.statusBar.add(this.statusLoader.view);
     this.statusBar.add(this.statusText);
+    this.queuedBox = new Box(this.renderer, {
+      id: "queued",
+      width: "100%",
+      flexDirection: "column",
+      paddingX: 1,
+    });
+    this.queuedText = new TextBlock(this.renderer, {
+      text: "",
+      width: "100%",
+      fg: "#9aa0a6",
+      wrapMode: "word",
+    });
+    this.queuedBox.add(this.queuedText);
+    this.queuedBox.visible = false;
     this.input = new InputField(this.renderer, {
       id: "input",
       width: "100%",
@@ -134,6 +153,7 @@ export class TuiApp {
     });
     this.root.add(this.scrollBox);
     this.root.add(this.statusBar);
+    this.root.add(this.queuedBox);
     this.root.add(this.input);
     this.renderer.root.add(this.root);
     this.renderer.start();
@@ -147,28 +167,16 @@ export class TuiApp {
         return;
       }
       if (this.isStreaming) {
-        this.setStatus("Busy. Wait for the current response to finish.");
+        this.queueMessage(trimmed, "steering");
+        if (this.input) {
+          this.input.value = "";
+        }
         return;
       }
-      this.isStreaming = true;
-      this.clearExitHint();
-      this.setStatus("Thinking...");
       if (this.input) {
         this.input.value = "";
       }
-      this.abortController?.abort();
-      this.abortController = new AbortController();
-      void this.runtime
-        .prompt(trimmed, { abortSignal: this.abortController.signal })
-        .catch((error) => {
-          if (this.isAbortError(error)) {
-            return;
-          }
-          console.error("Prompt failed:", error);
-          this.isStreaming = false;
-          this.setStatus(`Error: ${this.formatError(error)}`);
-          this.render();
-        });
+      this.submitPrompt(trimmed);
     });
     this.renderer.on("resize", () => this.render());
     this.renderer.keyInput.on("keypress", (key) => {
@@ -176,6 +184,24 @@ export class TuiApp {
         key.preventDefault();
         key.stopPropagation();
         this.handleCtrlC();
+        return;
+      }
+      const isEnter = key.name === "return" || key.name === "enter";
+      const alt = (key as { alt?: boolean }).alt ?? false;
+      if (isEnter && alt && this.input) {
+        const trimmed = this.input.value.trim();
+        if (!trimmed) {
+          return;
+        }
+        key.preventDefault();
+        key.stopPropagation();
+        if (this.isStreaming) {
+          this.queueMessage(trimmed, "follow-up");
+          this.input.value = "";
+          return;
+        }
+        this.input.value = "";
+        this.submitPrompt(trimmed);
         return;
       }
       if (key.name === "escape") {
@@ -190,6 +216,22 @@ export class TuiApp {
         return;
       }
       const name = key.name;
+      if (name === "up" && this.input && this.queuedMessages.length > 0) {
+        key.preventDefault();
+        key.stopPropagation();
+        const dequeued = this.queuedMessages.pop();
+        if (dequeued) {
+          if (dequeued.mode === "steering") {
+            this.runtime.dequeueLastSteeringMessage();
+          } else {
+            this.runtime.dequeueLastFollowUpMessage();
+          }
+          this.input.value = dequeued.content;
+          this.renderQueuedMessages();
+          this.setStatus(`Dequeued ${dequeued.mode} message for editing.`);
+        }
+        return;
+      }
       if (name !== "pageup" && name !== "pagedown" && name !== "home" && name !== "end") {
         return;
       }
@@ -234,11 +276,86 @@ export class TuiApp {
     this.currentAssistantIndex = undefined;
     this.isStreaming = false;
     this.toolCallEntries.clear();
+    this.queuedMessages = [];
     if (this.exitHintTimeout) {
       clearTimeout(this.exitHintTimeout);
       this.exitHintTimeout = undefined;
     }
     this.exitHintActive = false;
+  }
+
+  private submitPrompt(prompt: string): void {
+    this.isStreaming = true;
+    this.clearExitHint();
+    this.setStatus("Thinking...");
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    void this.runtime
+      .prompt(prompt, { abortSignal: this.abortController.signal })
+      .catch((error) => {
+        if (this.isAbortError(error)) {
+          return;
+        }
+        console.error("Prompt failed:", error);
+        this.isStreaming = false;
+        this.setStatus(`Error: ${this.formatError(error)}`);
+        this.render();
+      });
+  }
+
+  private queueMessage(text: string, mode: "steering" | "follow-up"): void {
+    if (mode === "steering") {
+      this.runtime.enqueueSteeringMessage(text);
+    } else {
+      this.runtime.enqueueFollowUpMessage(text);
+    }
+    this.queuedMessages.push({ mode, content: text });
+    this.renderQueuedMessages();
+    const counts = this.runtime.getQueueCounts();
+    this.setStatus(
+      `Queued ${mode} message. Steering: ${counts.steering}, Follow-up: ${counts.followUp}`
+    );
+  }
+
+  private renderQueuedMessages(): void {
+    if (!this.queuedBox || !this.queuedText) {
+      return;
+    }
+    if (this.queuedMessages.length === 0) {
+      this.queuedBox.visible = false;
+      this.queuedText.setText("");
+      this.renderer?.requestRender();
+      return;
+    }
+    const header = `Queued messages (${this.queuedMessages.length}) • Up Arrow to edit last`;
+    const lines = this.queuedMessages.map(
+      (item, index) => `${index + 1}. [${item.mode}] ${item.content}`
+    );
+    this.queuedText.setText([header, ...lines].join("\n"));
+    this.queuedBox.visible = true;
+    this.renderer?.requestRender();
+  }
+
+  private consumeQueuedMessageIfMatches(message: AgentMessage): void {
+    if (this.queuedMessages.length === 0) {
+      return;
+    }
+    if (message == null || typeof message !== "object") {
+      return;
+    }
+    const role = (message as { role?: string }).role;
+    if (role !== "user") {
+      return;
+    }
+    const content = (message as { content?: unknown }).content;
+    if (typeof content !== "string") {
+      return;
+    }
+    const queued = this.queuedMessages[0];
+    if (queued && queued.content === content) {
+      this.queuedMessages.shift();
+      this.renderQueuedMessages();
+    }
   }
 
   private handleEvent(event: AgentEvent): void {
@@ -270,6 +387,7 @@ export class TuiApp {
         break;
       }
       case "message_start": {
+        this.consumeQueuedMessageIfMatches(event.message);
         if (this.isToolMessage(event.message)) {
           break;
         }
@@ -945,8 +1063,9 @@ export class TuiApp {
 
   private setStatus(text: string): void {
     const nextText = this.exitHintActive && text === "Ready" ? TuiApp.exitHintText : text;
+    const displayText = nextText === "Ready" ? TuiApp.queueHintText : nextText;
     if (this.statusText) {
-      this.statusText.setText(nextText);
+      this.statusText.setText(displayText);
     }
     this.updateStatusIndicator();
     this.renderer?.requestRender();
@@ -1033,6 +1152,7 @@ export class TuiApp {
     } else {
       this.statusLoader.view.visible = false;
       this.statusLoader.stop();
+      this.statusLoader.view.content = "";
     }
   }
 

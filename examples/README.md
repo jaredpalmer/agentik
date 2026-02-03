@@ -20,6 +20,7 @@ bun examples/runtime-builtin-tools-anthropic.ts
 - `runtime-event-log.ts`: log the event sequence emitted by the runtime (mock model).
 - `runtime-transform-context.ts`: trim or enrich the context before calling the model (mock model).
 - `runtime-continue.ts`: continue a conversation without a new user message (mock model).
+- `runtime-steering-follow-up.ts`: queue steering vs follow-up messages (mock model).
 - `sdk-session-recording.ts`: record messages into an in-memory session store (mock model).
 - `sdk-file-session-store.ts`: persist session entries to a JSON file (mock model).
 - `sdk-instructions-and-events.ts`: set instructions and stream events via the SDK (mock model).

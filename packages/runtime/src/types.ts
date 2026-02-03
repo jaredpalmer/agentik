@@ -71,6 +71,8 @@ export type AgentToolDefinition<
   UI = unknown,
 > = AgentToolDefinitionBase<INPUT, OUTPUT, UI> & AgentToolOutputConfig<INPUT, OUTPUT, UI>;
 
+export type QueueMode = "one-at-a-time" | "all";
+
 export interface AgentState {
   instructions?: string | SystemModelMessage | Array<SystemModelMessage>;
   model: LanguageModel;
@@ -122,6 +124,8 @@ export type AgentRuntimeOptions = {
   output?: unknown;
   providerOptions?: ProviderOptions;
   callSettings?: CallSettings;
+  steeringMode?: QueueMode;
+  followUpMode?: QueueMode;
   convertToModelMessages?: (messages: AgentMessage[]) => PromiseLike<ModelMessage[]>;
   transformContext?: (
     messages: AgentMessage[],

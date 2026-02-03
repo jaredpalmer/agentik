@@ -14,6 +14,8 @@ export type CreateAgentSessionOptions = {
   output?: unknown;
   providerOptions?: ProviderOptions;
   callSettings?: CallSettings;
+  steeringMode?: AgentRuntimeOptions["steeringMode"];
+  followUpMode?: AgentRuntimeOptions["followUpMode"];
   convertToModelMessages?: (messages: AgentMessage[]) => PromiseLike<ModelMessage[]>;
   transformContext?: AgentRuntimeOptions["transformContext"];
   onEvent?: AgentRuntimeOptions["onEvent"];
@@ -36,6 +38,8 @@ export async function createAgentSession(
     output: options.output,
     providerOptions: options.providerOptions,
     callSettings: options.callSettings,
+    steeringMode: options.steeringMode,
+    followUpMode: options.followUpMode,
     convertToModelMessages: options.convertToModelMessages,
     transformContext: options.transformContext,
     onEvent: options.onEvent,

@@ -42,6 +42,25 @@ await runtime.prompt("Summarize the README.");
 
 The runtime is intentionally “dumb” and deterministic: it runs the loop, executes tools, and emits events. The SDK is where environment-specific policy lives: model selection and fallbacks, resource loading, session storage/restore, and app-level wiring. This keeps the runtime reusable and testable, while the SDK stays flexible for different products and integrations.
 
+**Queued messages (steering vs follow-up)**
+
+Steering messages are injected before the next model turn, so they can redirect the loop at a turn boundary. Follow-up messages are appended after the current turn completes, so they do not change the in-flight turn. Each queue supports `one-at-a-time` or `all` modes.
+
+```ts
+import { AgentRuntime } from "@agentik/runtime";
+
+const runtime = new AgentRuntime({
+  model,
+  steeringMode: "one-at-a-time",
+  followUpMode: "one-at-a-time",
+});
+
+runtime.enqueueSteeringMessage("Steer: ask before writing.");
+runtime.enqueueFollowUpMessage("Follow-up: add tests.");
+
+await runtime.prompt("Start with a plan.");
+```
+
 ## SDK
 
 `@agentik/sdk` builds on the runtime with session management and recording. `createAgentSession` wires a runtime, attaches a store, and starts capturing events as session entries.
@@ -194,6 +213,12 @@ AGENTIK_VERSION=cli-v0.1.0 AGENTIK_INSTALL_DIR="$HOME/bin" ./install.sh
 - Interactive (default): launches the OpenTUI interface for streaming and inspection.
 - Print: use `--print --prompt "..."` to stream text to stdout for scripts.
 - RPC: reserved for future use (currently unimplemented).
+
+**Interactive controls**
+
+- While streaming, press Enter to queue a steering message.
+- Press Alt+Enter to queue a follow-up message.
+- Press Up Arrow to dequeue the last queued message back into the input for editing.
 
 **Why the CLI matters**
 

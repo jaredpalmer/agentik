@@ -16,6 +16,7 @@ export {
   type AgentToolDefinition,
   type AgentToolExecuteFunction,
   type AgentToolResult,
+  type QueueMode,
   type CustomAgentMessages,
   type SessionEntry,
   type SessionTree,

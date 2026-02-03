@@ -73,4 +73,39 @@ describe("AgentRuntime", () => {
       throw new Error("Unexpected assistant message content.");
     }
   });
+
+  it("processes follow-up messages after the initial turn", async () => {
+    const runtime = new AgentRuntime({ model: createMockModel("Hello") });
+    runtime.enqueueFollowUpMessage({ role: "user", content: "Follow up" });
+
+    await runtime.prompt("Start");
+
+    const userMessages = runtime.state.messages.filter(
+      (message) => (message as { role?: string }).role === "user"
+    );
+    expect(userMessages.length).toBeGreaterThanOrEqual(2);
+
+    const assistantMessages = runtime.state.messages.filter(
+      (message) => (message as { role?: string }).role === "assistant"
+    );
+    expect(assistantMessages.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("prioritizes steering messages over follow-ups", async () => {
+    const runtime = new AgentRuntime({ model: createMockModel("Hello") });
+    runtime.enqueueSteeringMessage({ role: "user", content: "Steer" });
+    runtime.enqueueFollowUpMessage({ role: "user", content: "Follow" });
+
+    await runtime.prompt("Start");
+
+    const userMessages = runtime.state.messages.filter(
+      (message) => (message as { role?: string }).role === "user"
+    ) as Array<{ content?: unknown }>;
+
+    const contents = userMessages.map((message) =>
+      typeof message.content === "string" ? message.content : ""
+    );
+
+    expect(contents).toEqual(["Start", "Steer", "Follow"]);
+  });
 });

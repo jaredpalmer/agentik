@@ -36,6 +36,34 @@ export class AgentSession {
     });
   }
 
+  enqueueSteeringMessage(input: string | AgentMessage | Array<string | AgentMessage>): void {
+    this.runtime.enqueueSteeringMessage(input);
+  }
+
+  enqueueFollowUpMessage(input: string | AgentMessage | Array<string | AgentMessage>): void {
+    this.runtime.enqueueFollowUpMessage(input);
+  }
+
+  getQueueCounts(): { steering: number; followUp: number } {
+    return this.runtime.getQueueCounts();
+  }
+
+  dequeueLastSteeringMessage(): AgentMessage | undefined {
+    return this.runtime.dequeueLastSteeringMessage();
+  }
+
+  dequeueLastFollowUpMessage(): AgentMessage | undefined {
+    return this.runtime.dequeueLastFollowUpMessage();
+  }
+
+  setSteeringMode(mode: "one-at-a-time" | "all"): void {
+    this.runtime.setSteeringMode(mode);
+  }
+
+  setFollowUpMode(mode: "one-at-a-time" | "all"): void {
+    this.runtime.setFollowUpMode(mode);
+  }
+
   stopRecording(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
