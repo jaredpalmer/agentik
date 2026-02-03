@@ -1,1 +1,1 @@
-export {};
+export { runCli } from './cli';
