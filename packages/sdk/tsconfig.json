@@ -6,5 +6,5 @@
     "outDir": "dist"
   },
   "include": ["src"],
-  "references": [{ "path": "../agent" }]
+  "references": [{ "path": "../runtime" }]
 }

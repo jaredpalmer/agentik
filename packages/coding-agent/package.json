@@ -15,7 +15,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@agentik/agent": "workspace:*",
+    "@agentik/runtime": "workspace:*",
     "@agentik/sdk": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.35",
     "@opentui/core": "^0.1.77"

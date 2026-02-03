@@ -2,7 +2,7 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/agent"
+      "path": "./packages/runtime"
     },
     {
       "path": "./packages/sdk"

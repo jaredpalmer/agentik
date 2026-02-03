@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentMessage, AgentRuntime, SessionEntry, SessionTree } from "@agentik/agent";
+import type { AgentMessage, AgentRuntime, SessionEntry, SessionTree } from "@agentik/runtime";
 import type { SessionStore } from "./session-store";
 
 export type AgentSessionOptions = {

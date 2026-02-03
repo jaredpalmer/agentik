@@ -14,8 +14,18 @@
         "typescript": "^5.8.3",
       },
     },
-    "packages/agent": {
-      "name": "@agentik/agent",
+    "packages/coding-agent": {
+      "name": "@agentik/coding-agent",
+      "version": "0.0.0",
+      "dependencies": {
+        "@agentik/runtime": "workspace:*",
+        "@agentik/sdk": "workspace:*",
+        "@ai-sdk/anthropic": "^3.0.35",
+        "@opentui/core": "^0.1.77",
+      },
+    },
+    "packages/runtime": {
+      "name": "@agentik/runtime",
       "version": "0.0.0",
       "dependencies": {
         "@ai-sdk/provider-utils": "^4.0.13",
@@ -27,23 +37,19 @@
       "name": "@agentik/sdk",
       "version": "0.0.0",
       "dependencies": {
+        "@agentik/runtime": "workspace:*",
         "@ai-sdk/provider-utils": "^4.0.13",
-        "@agentik/agent": "workspace:*",
         "ai": "^6.0.68",
-      },
-    },
-    "packages/coding-agent": {
-      "name": "@agentik/coding-agent",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ai-sdk/anthropic": "^3.0.35",
-        "@agentik/agent": "workspace:*",
-        "@agentik/sdk": "workspace:*",
-        "@opentui/core": "^0.1.77",
       },
     },
   },
   "packages": {
+    "@agentik/coding-agent": ["@agentik/coding-agent@workspace:packages/coding-agent"],
+
+    "@agentik/runtime": ["@agentik/runtime@workspace:packages/runtime"],
+
+    "@agentik/sdk": ["@agentik/sdk@workspace:packages/sdk"],
+
     "@ai-sdk/anthropic": ["@ai-sdk/anthropic@3.0.35", "", { "dependencies": { "@ai-sdk/provider": "3.0.7", "@ai-sdk/provider-utils": "4.0.13" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-Y3g/5uVj621XSB9lGF7WrD7qR+orhV5xpaYkRF8kfj2j4W7e7BBGIvxcdsCf85FjJbc6tKQdNTZ84ZEqT3Y5TQ=="],
 
     "@ai-sdk/gateway": ["@ai-sdk/gateway@3.0.32", "", { "dependencies": { "@ai-sdk/provider": "3.0.7", "@ai-sdk/provider-utils": "4.0.13", "@vercel/oidc": "3.1.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-7clZRr07P9rpur39t1RrbIe7x8jmwnwUWI8tZs+BvAfX3NFgdSVGGIaT7bTz2pb08jmLXzTSDbrOTqAQ7uBkBQ=="],
@@ -125,12 +131,6 @@
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
-
-    "@agentik/agent": ["@agentik/agent@workspace:packages/agent"],
-
-    "@agentik/sdk": ["@agentik/sdk@workspace:packages/sdk"],
-
-    "@agentik/coding-agent": ["@agentik/coding-agent@workspace:packages/coding-agent"],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "", {}, "sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg=="],
 

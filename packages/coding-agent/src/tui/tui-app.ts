@@ -11,7 +11,7 @@ import {
   type TextChunk,
   type CliRenderer,
 } from "@opentui/core";
-import type { AgentEvent, AgentMessage, AgentRuntime } from "@agentik/agent";
+import type { AgentEvent, AgentMessage, AgentRuntime } from "@agentik/runtime";
 import { Box, InputField, Loader, MarkdownBlock, TextBlock, TruncatedText } from "./components";
 
 type DisplayMessage = {

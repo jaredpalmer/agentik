@@ -9,7 +9,7 @@
 
 ## Architecture (Packages)
 
-- `packages/agent`
+- `packages/runtime`
   - AI SDK v6 runtime wrapper (ToolLoopAgent + event model).
   - Tool registry, tool execution policies, and streaming event bus.
   - Session tree format (pi-style JSONL) and compaction hooks.
