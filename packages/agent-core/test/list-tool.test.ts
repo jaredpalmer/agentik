@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test";
 import { createListTool } from "../src/tools/list";
 
 function createTempDir(): string {
-  return mkdtempSync(join(tmpdir(), "openagent-list-"));
+  return mkdtempSync(join(tmpdir(), "agentik-list-"));
 }
 
 describe("list tool", () => {

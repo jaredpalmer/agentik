@@ -1,5 +1,5 @@
 {
-  "name": "@openagent/agent-sdk",
+  "name": "@agentik/agent-sdk",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@agentik/agent-core": "workspace:*",
     "@ai-sdk/provider-utils": "^4.0.13",
-    "@openagent/agent-core": "workspace:*",
     "ai": "^6.0.68"
   }
 }

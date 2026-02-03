@@ -9,8 +9,8 @@ import {
   createWebFetchTool,
   createWriteTool,
   type AgentToolDefinition,
-} from "@openagent/agent-core";
-import { createAgentSession } from "@openagent/agent-sdk";
+} from "@agentik/agent-core";
+import { createAgentSession } from "@agentik/agent-sdk";
 import { TuiApp } from "./tui/tui-app";
 import { pathToFileURL } from "node:url";
 
@@ -20,10 +20,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   const args = new Set(argv);
   const mode = parseMode(args);
   const prompt = getArgValue(argv, "--prompt");
-  const modelId = process.env.OPENAGENT_MODEL;
+  const modelId = process.env.AGENTIK_MODEL;
 
   if (!modelId) {
-    throw new Error("OPENAGENT_MODEL is required.");
+    throw new Error("AGENTIK_MODEL is required.");
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {

@@ -1,5 +1,5 @@
 {
-  "name": "openagent",
+  "name": "agentik",
   "private": true,
   "workspaces": [
     "packages/*"

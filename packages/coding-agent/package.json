@@ -1,5 +1,5 @@
 {
-  "name": "@openagent/coding-agent",
+  "name": "@agentik/coding-agent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,9 +15,9 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@agentik/agent-core": "workspace:*",
+    "@agentik/agent-sdk": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.35",
-    "@openagent/agent-core": "workspace:*",
-    "@openagent/agent-sdk": "workspace:*",
     "@opentui/core": "^0.1.77"
   }
 }

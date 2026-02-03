@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test";
 import { createGlobTool } from "../src/tools/glob";
 
 function createTempDir(): string {
-  return mkdtempSync(join(tmpdir(), "openagent-glob-"));
+  return mkdtempSync(join(tmpdir(), "agentik-glob-"));
 }
 
 describe("glob tool", () => {

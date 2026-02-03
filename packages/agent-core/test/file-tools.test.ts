@@ -8,7 +8,7 @@ import { createUpdateTool } from "../src/tools/update";
 import { createWriteTool } from "../src/tools/write";
 
 function createTempDir(): string {
-  return mkdtempSync(join(tmpdir(), "openagent-files-"));
+  return mkdtempSync(join(tmpdir(), "agentik-files-"));
 }
 
 describe("file tools", () => {
