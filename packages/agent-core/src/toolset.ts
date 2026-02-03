@@ -18,10 +18,13 @@ export type ToolEventHandlers = {
   }) => void;
 };
 
-type ToolExecuteResult = AgentToolResult | AsyncIterable<AgentToolResult>;
+type ToolExecuteResult =
+  | AgentToolResult
+  | PromiseLike<AgentToolResult>
+  | AsyncIterable<AgentToolResult>;
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<AgentToolResult> {
-  return value != null && typeof value === "object" && Symbol.asyncIterator in (value as object);
+  return value != null && typeof value === "object" && Symbol.asyncIterator in value;
 }
 
 export function createToolSet(tools: AgentToolDefinition[], handlers?: ToolEventHandlers): ToolSet {
@@ -46,8 +49,7 @@ function buildTool(definition: AgentToolDefinition, handlers?: ToolEventHandlers
     providerOptions: definition.providerOptions,
     strict: definition.strict,
     execute: definition.execute
-      ? async (input, options) =>
-          await executeTool(definition, input, options, handlers, uiByToolCallId)
+      ? (input, options) => executeTool(definition, input, options, handlers, uiByToolCallId)
       : undefined,
     toModelOutput: definition.toModelOutput
       ? ({ toolCallId, input, output }) =>

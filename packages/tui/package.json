@@ -16,6 +16,6 @@
   },
   "dependencies": {
     "@openagent/agent-core": "workspace:*",
-    "@opentui/core": "^0.0.0"
+    "@opentui/core": "^0.1.77"
   }
 }

@@ -10,7 +10,10 @@ import type { CallSettings, LanguageModel, StopCondition, ToolChoice } from "ai"
 
 export interface CustomAgentMessages {}
 
-export type AgentMessage = ModelMessage | CustomAgentMessages[keyof CustomAgentMessages];
+type CustomAgentMessage = CustomAgentMessages[keyof CustomAgentMessages];
+type UnionIfNotNever<A, B> = [B] extends [never] ? A : A | B;
+
+export type AgentMessage = UnionIfNotNever<ModelMessage, CustomAgentMessage>;
 
 export type AgentToolResult<OUTPUT = unknown, UI = unknown> = {
   output: OUTPUT;

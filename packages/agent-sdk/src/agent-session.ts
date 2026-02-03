@@ -17,9 +17,9 @@ export class AgentSession {
     this.store = options.store;
   }
 
-  async load(): Promise<SessionTree | undefined> {
+  async load(): Promise<SessionTree> {
     if (!this.store) {
-      return undefined;
+      return { version: 1, entries: [] };
     }
     return this.store.load();
   }

@@ -8,12 +8,13 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   const args = new Set(argv);
   const mode = parseMode(args);
   const prompt = getArgValue(argv, "--prompt");
-  const model = process.env.OPENAGENT_MODEL as LanguageModel | undefined;
+  const modelId = process.env.OPENAGENT_MODEL;
 
-  if (!model) {
+  if (!modelId) {
     throw new Error("OPENAGENT_MODEL is required.");
   }
 
+  const model = modelId as LanguageModel;
   const { session } = await createAgentSession({ model });
 
   if (mode === "interactive") {
