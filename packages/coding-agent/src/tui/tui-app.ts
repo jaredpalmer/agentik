@@ -3,6 +3,7 @@ import {
   ScrollBoxRenderable,
   StyledText,
   createCliRenderer,
+  CliRenderEvents,
   dim,
   fg,
   stringToStyledText,
@@ -50,6 +51,13 @@ export class TuiApp {
   private statusHeight = 1;
   private toolCallEntries = new Map<string, { index: number; toolName: string; args: unknown }>();
   private maxHistoryLines = 2000;
+  private isStopped = false;
+  private handleRendererDestroy = () => {
+    if (this.isStopped) {
+      return;
+    }
+    this.shutdown({ destroyRenderer: false });
+  };
 
   constructor(options: TuiAppOptions) {
     this.runtime = options.runtime;
@@ -59,7 +67,9 @@ export class TuiApp {
     if (this.renderer) {
       return;
     }
+    this.isStopped = false;
     this.renderer = await createCliRenderer({ exitOnCtrlC: true });
+    this.renderer.on(CliRenderEvents.DESTROY, this.handleRendererDestroy);
     this.root = new Box(this.renderer, {
       id: "root",
       width: "100%",
@@ -140,6 +150,7 @@ export class TuiApp {
         this.input.value = "";
       }
       void this.runtime.prompt(trimmed).catch((error) => {
+        console.error("Prompt failed:", error);
         this.isStreaming = false;
         this.setStatus(`Error: ${this.formatError(error)}`);
         this.render();
@@ -165,10 +176,23 @@ export class TuiApp {
   }
 
   stop(): void {
+    this.shutdown({ destroyRenderer: true });
+  }
+
+  private shutdown(options: { destroyRenderer: boolean }): void {
+    if (this.isStopped) {
+      return;
+    }
+    this.isStopped = true;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.statusLoader?.destroy();
-    this.renderer?.destroy();
+    if (this.renderer) {
+      this.renderer.off(CliRenderEvents.DESTROY, this.handleRendererDestroy);
+      if (options.destroyRenderer) {
+        this.renderer.destroy();
+      }
+    }
     this.renderer = undefined;
     this.root = undefined;
     this.scrollBox = undefined;
@@ -192,6 +216,15 @@ export class TuiApp {
       case "agent_end": {
         this.isStreaming = false;
         this.setStatus("Ready");
+        break;
+      }
+      case "turn_start": {
+        this.isStreaming = true;
+        this.setStatus("Thinking...");
+        break;
+      }
+      case "turn_end": {
+        this.setStatus(this.isStreaming ? "Thinking..." : "Ready");
         break;
       }
       case "message_start": {
@@ -328,8 +361,10 @@ export class TuiApp {
         this.render();
         break;
       }
-      default:
-        break;
+      default: {
+        const _exhaustive: never = event;
+        return _exhaustive;
+      }
     }
   }
 
@@ -489,17 +524,7 @@ export class TuiApp {
   }
 
   private formatValue(value: unknown): string {
-    if (value instanceof Error) {
-      return value.message || "Error";
-    }
-    if (typeof value === "string") {
-      return value;
-    }
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return String(value);
-    }
+    return this.formatUnknown(value, { errorFallback: "Error" });
   }
 
   private summarizeToolArgs(toolName: string, args: unknown): string[] {
@@ -834,23 +859,34 @@ export class TuiApp {
   }
 
   private formatError(error: unknown): string {
-    if (error instanceof Error) {
-      return error.stack ?? error.message ?? "Unknown error";
+    return this.formatUnknown(error, {
+      includeStack: true,
+      errorFallback: "Unknown error",
+      nullFallback: "Unknown error",
+    });
+  }
+
+  private formatUnknown(
+    value: unknown,
+    options: { includeStack?: boolean; errorFallback?: string; nullFallback?: string } = {}
+  ): string {
+    if (value instanceof Error) {
+      if (options.includeStack) {
+        return value.stack ?? value.message ?? options.errorFallback ?? "Unknown error";
+      }
+      return value.message || options.errorFallback || "Error";
     }
-    if (typeof error === "string") {
-      return error;
+    if (typeof value === "string") {
+      return value;
     }
-    if (error == null) {
-      return "Unknown error";
+    if (value == null) {
+      return options.nullFallback ?? String(value);
     }
     try {
-      return JSON.stringify(error, null, 2);
+      const json = JSON.stringify(value, null, 2);
+      return json ?? String(value);
     } catch {
-      try {
-        return String(error);
-      } catch {
-        return "Unknown error";
-      }
+      return String(value);
     }
   }
 

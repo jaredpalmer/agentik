@@ -1,8 +1,8 @@
 import {
   ToolLoopAgent,
   type LanguageModel,
-  type ProviderMetadata,
   type StreamTextTransform,
+  type TextStreamPart,
   type ToolChoice,
   type ToolLoopAgentOnStepFinishCallback,
   type ToolSet,
@@ -18,17 +18,7 @@ import type {
 import { defaultConvertToModelMessages } from "./message-utils";
 import { createToolSet } from "./toolset";
 
-type StreamPart = {
-  type: string;
-  id?: string;
-  text?: string;
-  toolCallId?: string;
-  toolName?: string;
-  input?: unknown;
-  output?: unknown;
-  error?: unknown;
-  providerMetadata?: ProviderMetadata;
-};
+type StreamPart = TextStreamPart<ToolSet>;
 
 export class AgentRuntime<CALL_OPTIONS = never> {
   private stateInternal: AgentState;
@@ -219,8 +209,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
       let currentToolResults: unknown[] = [];
       let lastAssistant: AgentMessage | null = null;
 
-      for await (const part of result.fullStream) {
-        const streamPart = part as StreamPart;
+      for await (const streamPart of result.fullStream as AsyncIterable<StreamPart>) {
         switch (streamPart.type) {
           case "start-step":
             this.emit({ type: "turn_start" });
@@ -299,11 +288,27 @@ export class AgentRuntime<CALL_OPTIONS = never> {
               });
             }
             break;
+          case "reasoning-start":
+          case "reasoning-delta":
+          case "reasoning-end":
+          case "tool-input-start":
+          case "tool-input-delta":
+          case "tool-input-end":
+          case "source":
+          case "file":
+          case "tool-approval-request":
+          case "start":
+          case "finish":
+          case "abort":
+          case "raw":
+            break;
           case "error":
             this.emit({ type: "error", error: streamPart.error });
             break;
-          default:
-            break;
+          default: {
+            const _exhaustive: never = streamPart;
+            return _exhaustive;
+          }
         }
       }
 

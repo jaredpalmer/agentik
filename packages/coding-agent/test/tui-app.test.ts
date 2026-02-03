@@ -40,4 +40,17 @@ describe("TuiApp", () => {
     const messages = app.messages;
     expect(messages[0]?.content).toBe('{\n  "foo": "bar"\n}');
   });
+
+  it("uses stack traces for error events", () => {
+    const app = createApp() as unknown as TestableApp;
+    const handleEvent = app.handleEvent.bind(app);
+
+    const error = new Error("Boom");
+    error.stack = "Stack: boom";
+
+    handleEvent({ type: "error", error });
+
+    const messages = app.messages;
+    expect(messages[0]?.content).toBe("Stack: boom");
+  });
 });

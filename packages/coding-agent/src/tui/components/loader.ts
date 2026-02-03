@@ -7,6 +7,7 @@ export type LoaderOptions = {
   frameColor?: string;
   messageColor?: string;
   content?: (frame: string, message: string) => StyledText;
+  view?: TextRenderable;
 };
 
 export class Loader {
@@ -21,6 +22,7 @@ export class Loader {
   private currentFrame = 0;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private message: string;
+  private isDestroyed = false;
 
   constructor(renderer: CliRenderer, options: LoaderOptions = {}) {
     this.renderer = renderer;
@@ -32,20 +34,29 @@ export class Loader {
     this.content = options.content;
     this.message = options.message ?? "Loading...";
 
-    this.view = new TextRenderable(renderer, {
-      content: "",
-      wrapMode: "none",
-      height: 1,
-    });
+    this.view =
+      options.view ??
+      new TextRenderable(renderer, {
+        content: "",
+        wrapMode: "none",
+        height: 1,
+      });
 
     this.start();
   }
 
   start(): void {
-    if (this.intervalId) {
+    if (this.intervalId || this.isDestroyed) {
+      return;
+    }
+    if (this.view.isDestroyed || this.renderer.isDestroyed) {
+      this.isDestroyed = true;
       return;
     }
     this.updateDisplay();
+    if (this.isDestroyed) {
+      return;
+    }
     this.intervalId = setInterval(() => {
       this.currentFrame = (this.currentFrame + 1) % this.frames.length;
       this.updateDisplay();
@@ -65,11 +76,20 @@ export class Loader {
   }
 
   destroy(): void {
+    if (this.isDestroyed) {
+      return;
+    }
+    this.isDestroyed = true;
     this.stop();
     this.view.destroy();
   }
 
   private updateDisplay(): void {
+    if (this.isDestroyed || this.view.isDestroyed || this.renderer.isDestroyed) {
+      this.isDestroyed = true;
+      this.stop();
+      return;
+    }
     const frame = this.frames[this.currentFrame] ?? "";
     if (this.content) {
       this.view.content = this.content(frame, this.message);

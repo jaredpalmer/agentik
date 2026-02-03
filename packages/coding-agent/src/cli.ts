@@ -32,6 +32,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
   const model = anthropic(modelId);
   const cwd = process.cwd();
+  // Tool definitions are heterogeneous; we coerce to the shared type to avoid variance issues with `needsApproval`.
   const tools = [
     createReadTool(cwd),
     createWriteTool(cwd),
@@ -41,7 +42,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     createGlobTool(cwd),
     createBashTool(cwd),
     createWebFetchTool(),
-  ] as unknown as AgentToolDefinition[];
+  ] as AgentToolDefinition[];
 
   const { session } = await createAgentSession({ model, tools });
 
@@ -115,7 +116,7 @@ function formatRuntimeError(error: unknown): string {
 const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
 if (entryUrl && import.meta.url === entryUrl) {
   runCli().catch((error) => {
-    console.error(error);
+    console.error(formatRuntimeError(error));
     process.exitCode = 1;
   });
 }
