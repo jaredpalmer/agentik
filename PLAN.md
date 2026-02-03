@@ -72,3 +72,11 @@
 - Tooling, extensions, skills.
 - Subagent usage patterns.
 - SDK embedding examples.
+
+#### Future examples backlog (post-feature work)
+
+- Skills/prompts/extensions loading and override hooks.
+- Session resume/listing with persistent stores and parent links.
+- Model registry, provider selection, and fallback behavior.
+- Tool approval/safety gates and tool override patterns.
+- CLI modes (print/json/rpc) and session workflows.
