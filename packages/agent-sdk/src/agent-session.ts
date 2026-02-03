@@ -1,11 +1,6 @@
-import { randomUUID } from 'node:crypto';
-import type {
-  AgentMessage,
-  AgentRuntime,
-  SessionEntry,
-  SessionTree,
-} from '@openagent/agent-core';
-import type { SessionStore } from './session-store';
+import { randomUUID } from "node:crypto";
+import type { AgentMessage, AgentRuntime, SessionEntry, SessionTree } from "@openagent/agent-core";
+import type { SessionStore } from "./session-store";
 
 export type AgentSessionOptions = {
   store?: SessionStore;
@@ -33,8 +28,8 @@ export class AgentSession {
     if (!this.store || this.unsubscribe) {
       return;
     }
-    this.unsubscribe = this.runtime.subscribe(event => {
-      if (event.type !== 'message_end') {
+    this.unsubscribe = this.runtime.subscribe((event) => {
+      if (event.type !== "message_end") {
         return;
       }
       void this.appendMessage(event.message);

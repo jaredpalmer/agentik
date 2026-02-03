@@ -1,1 +1,1 @@
-export { TuiApp, type TuiAppOptions } from './tui-app';
+export { TuiApp, type TuiAppOptions } from "./tui-app";

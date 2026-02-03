@@ -1,12 +1,7 @@
-import { spawn } from 'node:child_process';
-import { jsonSchema } from '@ai-sdk/provider-utils';
-import type { AgentToolDefinition } from '../types';
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  formatSize,
-  truncateTail,
-} from './truncate';
+import { spawn } from "node:child_process";
+import { jsonSchema } from "@ai-sdk/provider-utils";
+import type { AgentToolDefinition } from "../types";
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateTail } from "./truncate";
 
 export type BashToolInput = {
   command: string;
@@ -14,12 +9,12 @@ export type BashToolInput = {
 };
 
 const bashSchema = jsonSchema<BashToolInput>({
-  type: 'object',
+  type: "object",
   properties: {
-    command: { type: 'string', description: 'Shell command to execute.' },
-    timeout: { type: 'number', description: 'Timeout in seconds.' },
+    command: { type: "string", description: "Shell command to execute." },
+    timeout: { type: "number", description: "Timeout in seconds." },
   },
-  required: ['command'],
+  required: ["command"],
   additionalProperties: false,
 });
 
@@ -29,20 +24,20 @@ export type BashToolOptions = {
 
 export function createBashTool(
   cwd: string,
-  options: BashToolOptions = {},
+  options: BashToolOptions = {}
 ): AgentToolDefinition<BashToolInput, string> {
   return {
-    name: 'bash',
-    label: 'bash',
+    name: "bash",
+    label: "bash",
     description: `Execute a shell command. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)}.`,
     inputSchema: bashSchema,
-    execute: async input => {
+    execute: async (input) => {
       return new Promise((resolve, reject) => {
         const child = spawn(input.command, {
           cwd,
           env: { ...process.env, ...options.env },
           shell: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
+          stdio: ["ignore", "pipe", "pipe"],
         });
 
         const chunks: Buffer[] = [];
@@ -52,28 +47,28 @@ export function createBashTool(
           chunks.push(data);
         };
 
-        child.stdout?.on('data', onData);
-        child.stderr?.on('data', onData);
+        child.stdout?.on("data", onData);
+        child.stderr?.on("data", onData);
 
         let timeoutId: NodeJS.Timeout | undefined;
         if (input.timeout && input.timeout > 0) {
           timeoutId = setTimeout(() => {
-            child.kill('SIGKILL');
+            child.kill("SIGKILL");
           }, input.timeout * 1000);
         }
 
-        child.on('error', error => {
+        child.on("error", (error) => {
           if (timeoutId) {
             clearTimeout(timeoutId);
           }
           reject(error);
         });
 
-        child.on('close', code => {
+        child.on("close", (code) => {
           if (timeoutId) {
             clearTimeout(timeoutId);
           }
-          const output = Buffer.concat(chunks).toString('utf-8');
+          const output = Buffer.concat(chunks).toString("utf-8");
           const truncation = truncateTail(output, {
             maxLines: DEFAULT_MAX_LINES,
             maxBytes: DEFAULT_MAX_BYTES,
@@ -84,7 +79,7 @@ export function createBashTool(
             text += `\n\n[Output truncated at ${formatSize(DEFAULT_MAX_BYTES)}.]`;
           }
 
-          text = `Exit code: ${code ?? 'unknown'}\n\n${text}`.trim();
+          text = `Exit code: ${code ?? "unknown"}\n\n${text}`.trim();
           resolve({ output: text });
         });
       });

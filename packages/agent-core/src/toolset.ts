@@ -1,17 +1,10 @@
-import { tool } from '@ai-sdk/provider-utils';
-import type { Tool as AiTool, ToolExecutionOptions } from '@ai-sdk/provider-utils';
-import type { ToolSet } from 'ai';
-import type {
-  AgentToolDefinition,
-  AgentToolResult,
-} from './types';
+import { tool } from "@ai-sdk/provider-utils";
+import type { Tool as AiTool, ToolExecutionOptions } from "@ai-sdk/provider-utils";
+import type { ToolSet } from "ai";
+import type { AgentToolDefinition, AgentToolResult } from "./types";
 
 export type ToolEventHandlers = {
-  onStart?: (options: {
-    toolCallId: string;
-    toolName: string;
-    input: unknown;
-  }) => void;
+  onStart?: (options: { toolCallId: string; toolName: string; input: unknown }) => void;
   onUpdate?: (options: {
     toolCallId: string;
     toolName: string;
@@ -28,17 +21,10 @@ export type ToolEventHandlers = {
 type ToolExecuteResult = AgentToolResult | AsyncIterable<AgentToolResult>;
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<AgentToolResult> {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    Symbol.asyncIterator in (value as object)
-  );
+  return value != null && typeof value === "object" && Symbol.asyncIterator in (value as object);
 }
 
-export function createToolSet(
-  tools: AgentToolDefinition[],
-  handlers?: ToolEventHandlers,
-): ToolSet {
+export function createToolSet(tools: AgentToolDefinition[], handlers?: ToolEventHandlers): ToolSet {
   const toolSet: ToolSet = {};
 
   for (const definition of tools) {
@@ -80,7 +66,7 @@ async function executeTool(
   input: unknown,
   options: ToolExecutionOptions,
   handlers: ToolEventHandlers | undefined,
-  uiByToolCallId: Map<string, unknown>,
+  uiByToolCallId: Map<string, unknown>
 ): Promise<unknown> {
   handlers?.onStart?.({
     toolCallId: options.toolCallId,
@@ -116,8 +102,7 @@ async function executeTool(
     }
 
     const resolved = await result;
-    const safeResult =
-      resolved == null ? ({ output: undefined } as AgentToolResult) : resolved;
+    const safeResult = resolved == null ? ({ output: undefined } as AgentToolResult) : resolved;
     uiByToolCallId.set(options.toolCallId, safeResult.ui);
     handlers?.onEnd?.({
       toolCallId: options.toolCallId,

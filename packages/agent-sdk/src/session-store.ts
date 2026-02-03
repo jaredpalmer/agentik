@@ -1,4 +1,4 @@
-import type { SessionEntry, SessionTree } from '@openagent/agent-core';
+import type { SessionEntry, SessionTree } from "@openagent/agent-core";
 
 export interface SessionStore {
   load(): Promise<SessionTree>;

@@ -4,7 +4,7 @@ export const DEFAULT_MAX_BYTES = 50 * 1024;
 export type TruncationResult = {
   content: string;
   truncated: boolean;
-  truncatedBy: 'lines' | 'bytes' | null;
+  truncatedBy: "lines" | "bytes" | null;
   totalLines: number;
   totalBytes: number;
   outputLines: number;
@@ -26,15 +26,12 @@ export function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function truncateHead(
-  content: string,
-  options: TruncationOptions = {},
-): TruncationResult {
+export function truncateHead(content: string, options: TruncationOptions = {}): TruncationResult {
   const maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
 
-  const totalBytes = Buffer.byteLength(content, 'utf-8');
-  const lines = content.split('\n');
+  const totalBytes = Buffer.byteLength(content, "utf-8");
+  const lines = content.split("\n");
   const totalLines = lines.length;
 
   if (totalLines <= maxLines && totalBytes <= maxBytes) {
@@ -51,13 +48,13 @@ export function truncateHead(
 
   const outputLines: string[] = [];
   let outputBytes = 0;
-  let truncatedBy: 'lines' | 'bytes' = 'lines';
+  let truncatedBy: "lines" | "bytes" = "lines";
 
   for (let index = 0; index < lines.length && index < maxLines; index += 1) {
     const line = lines[index];
-    const lineBytes = Buffer.byteLength(line, 'utf-8') + (index > 0 ? 1 : 0);
+    const lineBytes = Buffer.byteLength(line, "utf-8") + (index > 0 ? 1 : 0);
     if (outputBytes + lineBytes > maxBytes) {
-      truncatedBy = 'bytes';
+      truncatedBy = "bytes";
       break;
     }
     outputLines.push(line);
@@ -65,25 +62,22 @@ export function truncateHead(
   }
 
   return {
-    content: outputLines.join('\n'),
+    content: outputLines.join("\n"),
     truncated: true,
     truncatedBy,
     totalLines,
     totalBytes,
     outputLines: outputLines.length,
-    outputBytes: Buffer.byteLength(outputLines.join('\n'), 'utf-8'),
+    outputBytes: Buffer.byteLength(outputLines.join("\n"), "utf-8"),
   };
 }
 
-export function truncateTail(
-  content: string,
-  options: TruncationOptions = {},
-): TruncationResult {
+export function truncateTail(content: string, options: TruncationOptions = {}): TruncationResult {
   const maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
 
-  const totalBytes = Buffer.byteLength(content, 'utf-8');
-  const lines = content.split('\n');
+  const totalBytes = Buffer.byteLength(content, "utf-8");
+  const lines = content.split("\n");
   const totalLines = lines.length;
 
   if (totalLines <= maxLines && totalBytes <= maxBytes) {
@@ -100,24 +94,24 @@ export function truncateTail(
 
   const outputLines: string[] = [];
   let outputBytes = 0;
-  let truncatedBy: 'lines' | 'bytes' = 'lines';
+  let truncatedBy: "lines" | "bytes" = "lines";
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     if (outputLines.length >= maxLines) {
-      truncatedBy = 'lines';
+      truncatedBy = "lines";
       break;
     }
     const line = lines[index];
-    const lineBytes = Buffer.byteLength(line, 'utf-8') + (outputLines.length > 0 ? 1 : 0);
+    const lineBytes = Buffer.byteLength(line, "utf-8") + (outputLines.length > 0 ? 1 : 0);
     if (outputBytes + lineBytes > maxBytes) {
-      truncatedBy = 'bytes';
+      truncatedBy = "bytes";
       break;
     }
     outputLines.unshift(line);
     outputBytes += lineBytes;
   }
 
-  const output = outputLines.join('\n');
+  const output = outputLines.join("\n");
   return {
     content: output,
     truncated: true,
@@ -125,6 +119,6 @@ export function truncateTail(
     totalLines,
     totalBytes,
     outputLines: outputLines.length,
-    outputBytes: Buffer.byteLength(output, 'utf-8'),
+    outputBytes: Buffer.byteLength(output, "utf-8"),
   };
 }

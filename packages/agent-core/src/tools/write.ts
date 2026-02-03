@@ -1,8 +1,8 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { jsonSchema } from '@ai-sdk/provider-utils';
-import type { AgentToolDefinition } from '../types';
-import { resolveToCwd } from './path-utils';
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { jsonSchema } from "@ai-sdk/provider-utils";
+import type { AgentToolDefinition } from "../types";
+import { resolveToCwd } from "./path-utils";
 
 export type WriteToolInput = {
   path: string;
@@ -10,12 +10,12 @@ export type WriteToolInput = {
 };
 
 const writeSchema = jsonSchema<WriteToolInput>({
-  type: 'object',
+  type: "object",
   properties: {
-    path: { type: 'string', description: 'Path to the file to write.' },
-    content: { type: 'string', description: 'Content to write.' },
+    path: { type: "string", description: "Path to the file to write." },
+    content: { type: "string", description: "Content to write." },
   },
-  required: ['path', 'content'],
+  required: ["path", "content"],
   additionalProperties: false,
 });
 
@@ -25,8 +25,8 @@ export type WriteOperations = {
 };
 
 const defaultWriteOperations: WriteOperations = {
-  writeFile: (path, content) => writeFile(path, content, 'utf-8'),
-  mkdir: dir => mkdir(dir, { recursive: true }).then(() => undefined),
+  writeFile: (path, content) => writeFile(path, content, "utf-8"),
+  mkdir: (dir) => mkdir(dir, { recursive: true }).then(() => undefined),
 };
 
 export type WriteToolOptions = {
@@ -35,16 +35,16 @@ export type WriteToolOptions = {
 
 export function createWriteTool(
   cwd: string,
-  options: WriteToolOptions = {},
+  options: WriteToolOptions = {}
 ): AgentToolDefinition<WriteToolInput, string> {
   const ops = options.operations ?? defaultWriteOperations;
 
   return {
-    name: 'write',
-    label: 'write',
-    description: 'Write content to a file. Creates parent directories as needed.',
+    name: "write",
+    label: "write",
+    description: "Write content to a file. Creates parent directories as needed.",
     inputSchema: writeSchema,
-    execute: async input => {
+    execute: async (input) => {
       const absolutePath = resolveToCwd(input.path, cwd);
       await ops.mkdir(dirname(absolutePath));
       await ops.writeFile(absolutePath, input.content);

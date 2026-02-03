@@ -1,10 +1,10 @@
 {
   "name": "openagent",
   "private": true,
-  "type": "module",
   "workspaces": [
     "packages/*"
   ],
+  "type": "module",
   "scripts": {
     "prepare": "lefthook install",
     "build": "tsc -b",

@@ -1,8 +1,8 @@
-import { readdir, stat } from 'node:fs/promises';
-import { jsonSchema } from '@ai-sdk/provider-utils';
-import type { AgentToolDefinition } from '../types';
-import { resolveToCwd } from './path-utils';
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from './truncate';
+import { readdir, stat } from "node:fs/promises";
+import { jsonSchema } from "@ai-sdk/provider-utils";
+import type { AgentToolDefinition } from "../types";
+import { resolveToCwd } from "./path-utils";
+import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from "./truncate";
 
 export type ListToolInput = {
   path?: string;
@@ -10,12 +10,12 @@ export type ListToolInput = {
 };
 
 const listSchema = jsonSchema<ListToolInput>({
-  type: 'object',
+  type: "object",
   properties: {
-    path: { type: 'string', description: 'Directory to list.' },
+    path: { type: "string", description: "Directory to list." },
     limit: {
-      type: 'number',
-      description: 'Maximum number of entries to return.',
+      type: "number",
+      description: "Maximum number of entries to return.",
     },
   },
   additionalProperties: false,
@@ -29,8 +29,8 @@ export type ListOperations = {
 };
 
 const defaultListOperations: ListOperations = {
-  readdir: path => readdir(path),
-  stat: path => stat(path),
+  readdir: (path) => readdir(path),
+  stat: (path) => stat(path),
 };
 
 export type ListToolOptions = {
@@ -39,17 +39,17 @@ export type ListToolOptions = {
 
 export function createListTool(
   cwd: string,
-  options: ListToolOptions = {},
+  options: ListToolOptions = {}
 ): AgentToolDefinition<ListToolInput, string> {
   const ops = options.operations ?? defaultListOperations;
 
   return {
-    name: 'list',
-    label: 'list',
+    name: "list",
+    label: "list",
     description: `List directory entries. Output is truncated to ${formatSize(DEFAULT_MAX_BYTES)} or ${DEFAULT_LIMIT} entries.`,
     inputSchema: listSchema,
-    execute: async input => {
-      const basePath = resolveToCwd(input.path ?? '.', cwd);
+    execute: async (input) => {
+      const basePath = resolveToCwd(input.path ?? ".", cwd);
       const limit = input.limit ?? DEFAULT_LIMIT;
       const entries = await ops.readdir(basePath);
       entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -68,10 +68,10 @@ export function createListTool(
       }
 
       if (results.length === 0) {
-        return { output: '(empty directory)' };
+        return { output: "(empty directory)" };
       }
 
-      const outputText = results.join('\n');
+      const outputText = results.join("\n");
       const truncation = truncateHead(outputText, {
         maxLines: Number.MAX_SAFE_INTEGER,
       });

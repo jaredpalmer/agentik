@@ -6,7 +6,5 @@
     "outDir": "dist"
   },
   "include": ["src"],
-  "references": [
-    { "path": "../agent-core" }
-  ]
+  "references": [{ "path": "../agent-core" }]
 }

@@ -1,11 +1,11 @@
-import { homedir } from 'node:os';
-import { isAbsolute, resolve as resolvePath } from 'node:path';
+import { homedir } from "node:os";
+import { isAbsolute, resolve as resolvePath } from "node:path";
 
 export function expandPath(filePath: string): string {
-  if (filePath === '~') {
+  if (filePath === "~") {
     return homedir();
   }
-  if (filePath.startsWith('~/')) {
+  if (filePath.startsWith("~/")) {
     return `${homedir()}${filePath.slice(1)}`;
   }
   return filePath;

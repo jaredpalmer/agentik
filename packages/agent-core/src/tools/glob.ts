@@ -1,8 +1,8 @@
-import { glob } from 'glob';
-import { jsonSchema } from '@ai-sdk/provider-utils';
-import type { AgentToolDefinition } from '../types';
-import { resolveToCwd } from './path-utils';
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from './truncate';
+import { glob } from "glob";
+import { jsonSchema } from "@ai-sdk/provider-utils";
+import type { AgentToolDefinition } from "../types";
+import { resolveToCwd } from "./path-utils";
+import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from "./truncate";
 
 export type GlobToolInput = {
   pattern: string;
@@ -11,16 +11,16 @@ export type GlobToolInput = {
 };
 
 const globSchema = jsonSchema<GlobToolInput>({
-  type: 'object',
+  type: "object",
   properties: {
     pattern: {
-      type: 'string',
+      type: "string",
       description: "Glob pattern like '**/*.ts' or '*.md'.",
     },
-    path: { type: 'string', description: 'Directory to search.' },
-    limit: { type: 'number', description: 'Maximum number of results.' },
+    path: { type: "string", description: "Directory to search." },
+    limit: { type: "number", description: "Maximum number of results." },
   },
-  required: ['pattern'],
+  required: ["pattern"],
   additionalProperties: false,
 });
 
@@ -32,17 +32,17 @@ export type GlobToolOptions = {
 
 export function createGlobTool(
   cwd: string,
-  options: GlobToolOptions = {},
+  options: GlobToolOptions = {}
 ): AgentToolDefinition<GlobToolInput, string> {
-  const ignore = options.ignore ?? ['**/node_modules/**', '**/.git/**'];
+  const ignore = options.ignore ?? ["**/node_modules/**", "**/.git/**"];
 
   return {
-    name: 'glob',
-    label: 'glob',
+    name: "glob",
+    label: "glob",
     description: `Search files by glob. Output is truncated to ${formatSize(DEFAULT_MAX_BYTES)} or ${DEFAULT_LIMIT} results.`,
     inputSchema: globSchema,
-    execute: async input => {
-      const searchPath = resolveToCwd(input.path ?? '.', cwd);
+    execute: async (input) => {
+      const searchPath = resolveToCwd(input.path ?? ".", cwd);
       const limit = input.limit ?? DEFAULT_LIMIT;
 
       const matches = await glob(input.pattern, {
@@ -56,10 +56,10 @@ export function createGlobTool(
       const limited = matches.slice(0, limit);
 
       if (limited.length === 0) {
-        return { output: 'No files found.' };
+        return { output: "No files found." };
       }
 
-      const rawOutput = limited.join('\n');
+      const rawOutput = limited.join("\n");
       const truncation = truncateHead(rawOutput, {
         maxLines: Number.MAX_SAFE_INTEGER,
       });

@@ -1,6 +1,6 @@
-import type { SystemModelMessage } from '@ai-sdk/provider-utils';
-import type { AgentRuntimeOptions, AgentToolDefinition } from './types';
-import { AgentRuntime } from './agent-runtime';
+import type { SystemModelMessage } from "@ai-sdk/provider-utils";
+import type { AgentRuntimeOptions, AgentToolDefinition } from "./types";
+import { AgentRuntime } from "./agent-runtime";
 
 export type SharedMemorySnapshot = Record<string, unknown>;
 
@@ -72,10 +72,10 @@ export class SubagentManager {
 
   create(options: SubagentOptions): SubagentInstance {
     if (!this.enabled) {
-      throw new Error('Subagents are disabled.');
+      throw new Error("Subagents are disabled.");
     }
     if (this.agents.size >= this.maxAgents) {
-      throw new Error('Subagent limit reached.');
+      throw new Error("Subagent limit reached.");
     }
     if (this.agents.has(options.id)) {
       throw new Error(`Subagent ${options.id} already exists.`);

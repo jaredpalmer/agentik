@@ -1,10 +1,5 @@
-import {
-  BoxRenderable,
-  TextRenderable,
-  createCliRenderer,
-  type CliRenderer,
-} from '@opentui/core';
-import type { AgentEvent, AgentMessage, AgentRuntime } from '@openagent/agent-core';
+import { BoxRenderable, TextRenderable, createCliRenderer, type CliRenderer } from "@opentui/core";
+import type { AgentEvent, AgentMessage, AgentRuntime } from "@openagent/agent-core";
 
 type DisplayMessage = {
   role: string;
@@ -34,20 +29,20 @@ export class TuiApp {
     }
     this.renderer = await createCliRenderer({ exitOnCtrlC: true });
     this.root = new BoxRenderable(this.renderer, {
-      id: 'root',
-      width: '100%',
-      height: '100%',
+      id: "root",
+      width: "100%",
+      height: "100%",
     });
     this.messagesView = new TextRenderable(this.renderer, {
-      id: 'messages',
-      width: '100%',
-      height: '100%',
-      content: '',
+      id: "messages",
+      width: "100%",
+      height: "100%",
+      content: "",
     });
     this.root.add(this.messagesView);
     this.renderer.root.add(this.root);
     this.renderer.start();
-    this.unsubscribe = this.runtime.subscribe(event => this.handleEvent(event));
+    this.unsubscribe = this.runtime.subscribe((event) => this.handleEvent(event));
   }
 
   stop(): void {
@@ -63,27 +58,27 @@ export class TuiApp {
 
   private handleEvent(event: AgentEvent): void {
     switch (event.type) {
-      case 'message_start': {
+      case "message_start": {
         const entry = this.formatMessage(event.message);
         this.messages.push(entry);
-        if (entry.role === 'assistant') {
+        if (entry.role === "assistant") {
           this.currentAssistantIndex = this.messages.length - 1;
         }
         this.render();
         break;
       }
-      case 'message_update': {
+      case "message_update": {
         if (this.currentAssistantIndex != null) {
           this.messages[this.currentAssistantIndex].content += event.delta;
           this.render();
         }
         break;
       }
-      case 'message_end': {
+      case "message_end": {
         if (this.messages.length > 0) {
           const entry = this.formatMessage(event.message);
           this.messages[this.messages.length - 1] = entry;
-          if (entry.role === 'assistant') {
+          if (entry.role === "assistant") {
             this.currentAssistantIndex = undefined;
           }
           this.render();
@@ -102,19 +97,19 @@ export class TuiApp {
   }
 
   private extractRole(message: AgentMessage): string {
-    if (message && typeof message === 'object' && 'role' in message) {
+    if (message && typeof message === "object" && "role" in message) {
       const role = (message as { role?: string }).role;
       if (role) {
         return role;
       }
     }
-    return 'custom';
+    return "custom";
   }
 
   private extractContent(message: AgentMessage): string {
-    if (message && typeof message === 'object' && 'content' in message) {
+    if (message && typeof message === "object" && "content" in message) {
       const content = (message as { content?: unknown }).content;
-      if (typeof content === 'string') {
+      if (typeof content === "string") {
         return content;
       }
       return JSON.stringify(content, null, 2);
@@ -127,8 +122,8 @@ export class TuiApp {
       return;
     }
     const text = this.messages
-      .map(message => `[${message.role}] ${message.content}`)
-      .join('\n\n');
+      .map((message) => `[${message.role}] ${message.content}`)
+      .join("\n\n");
     this.messagesView.content = text;
     this.renderer.requestRender();
   }
