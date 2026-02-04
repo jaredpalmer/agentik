@@ -1,24 +1,29 @@
-import { SharedMemoryStore, SubagentManager } from "@agentik/runtime";
-import { createMockModel } from "./mock-model";
+import { anthropic } from "@ai-sdk/anthropic";
+import {
+  Agent,
+  SharedMemoryStore,
+  SubagentRegistry,
+  createReadTool,
+  createSubagentTool,
+} from "@agentik/runtime";
 
-// Subagents are optional and disabled by default.
-// This example enables them and shares a memory store across agents.
 const sharedMemory = new SharedMemoryStore();
-const manager = new SubagentManager({
-  enabled: true,
-  maxAgents: 2,
-  sharedMemory,
-  baseRuntimeOptions: {
-    model: createMockModel("Subagent response."),
+const registry = new SubagentRegistry();
+
+registry.register({
+  id: "explorer",
+  config: {
+    model: anthropic("claude-opus-4-5"),
+    tools: [createReadTool(process.cwd())],
   },
+  memory: sharedMemory,
 });
 
-const explorer = manager.create({ id: "explorer" });
-const summarizer = manager.create({ id: "summarizer" });
+const explorerTool = createSubagentTool({ id: "explorer", registry });
+const agent = new Agent({
+  model: anthropic("claude-opus-4-5"),
+  tools: [explorerTool],
+});
 
-await explorer.runtime.prompt("Scan the repo and report key files.");
-sharedMemory.set("findings", "README.md, packages/runtime, packages/sdk, packages/coding-agent");
-
-await summarizer.runtime.prompt("Summarize the findings from shared memory.");
-
-console.log("Shared memory snapshot:", sharedMemory.snapshot());
+await agent.prompt("Delegate to explorer: scan the repo for TODOs.");
+sharedMemory.set("todos", "Captured in explorer output.");

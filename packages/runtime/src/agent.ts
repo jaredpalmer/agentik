@@ -2,17 +2,19 @@ import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "@ai-sdk/provider-utils";
 import type {
   AgentCallOptions,
+  AgentConfig,
   AgentEvent,
   AgentMessage,
-  AgentRuntimeOptions,
   QueueMode,
-  SessionEntry,
+  SessionMessageEntry,
   SessionTree,
+  ThinkingBudgets,
+  ThinkingLevel,
 } from "./types";
 import { AgentRuntime } from "./agent-runtime";
 import type { SessionStore } from "./session-store";
 
-export type AgentOptions = AgentRuntimeOptions & {
+export type AgentOptions<CALL_OPTIONS = never> = AgentConfig<CALL_OPTIONS> & {
   sessionStore?: SessionStore;
 };
 
@@ -21,10 +23,11 @@ export class Agent<CALL_OPTIONS = never> {
   private store?: SessionStore;
   private lastEntryId?: string;
   private unsubscribe?: () => void;
+  private runningPrompt?: Promise<void>;
 
-  constructor(options: AgentOptions) {
+  constructor(options: AgentOptions<CALL_OPTIONS>) {
     const { sessionStore, ...runtimeOptions } = options;
-    this.runtime = new AgentRuntime(runtimeOptions);
+    this.runtime = new AgentRuntime<CALL_OPTIONS>(runtimeOptions);
     this.store = sessionStore;
     if (this.store) {
       this.startRecording();
@@ -39,28 +42,52 @@ export class Agent<CALL_OPTIONS = never> {
     return this.runtime.subscribe(listener);
   }
 
-  setInstructions(instructions: AgentRuntimeOptions["instructions"]): void {
+  setInstructions(instructions: AgentConfig["instructions"]): void {
     this.runtime.setInstructions(instructions);
   }
 
-  setModel(model: AgentRuntimeOptions["model"]): void {
+  setModel(model: AgentConfig["model"]): void {
     this.runtime.setModel(model);
   }
 
-  setTools(tools: AgentRuntimeOptions["tools"]): void {
+  setTools(tools: AgentConfig["tools"]): void {
     this.runtime.setTools(tools);
   }
 
-  setToolChoice(choice: AgentRuntimeOptions["toolChoice"]): void {
+  setToolChoice(choice: AgentConfig["toolChoice"]): void {
     this.runtime.setToolChoice(choice);
   }
 
-  setTransform(transform: AgentRuntimeOptions["transformContext"]): void {
+  setThinkingLevel(level?: ThinkingLevel): void {
+    this.runtime.setThinkingLevel(level);
+  }
+
+  setThinkingBudgets(budgets?: ThinkingBudgets): void {
+    this.runtime.setThinkingBudgets(budgets);
+  }
+
+  setSessionId(sessionId?: string): void {
+    this.runtime.setSessionId(sessionId);
+  }
+
+  setTransform(transform: AgentConfig["transformContext"]): void {
     this.runtime.setTransform(transform);
   }
 
-  setConvertToModelMessages(convert: AgentRuntimeOptions["convertToModelMessages"]): void {
+  setConvertToModelMessages(convert: AgentConfig["convertToModelMessages"]): void {
     this.runtime.setConvertToModelMessages(convert);
+  }
+
+  replaceMessages(messages: AgentMessage[]): void {
+    this.runtime.replaceMessages(messages);
+  }
+
+  appendMessage(message: AgentMessage): void {
+    this.runtime.appendMessage(message);
+  }
+
+  clearMessages(): void {
+    this.runtime.clearMessages();
   }
 
   getSteeringMode(): QueueMode {
@@ -91,6 +118,14 @@ export class Agent<CALL_OPTIONS = never> {
     this.runtime.enqueueFollowUpMessage(input);
   }
 
+  steer(message: string | AgentMessage): void {
+    this.enqueueSteeringMessage(message);
+  }
+
+  followUp(message: string | AgentMessage): void {
+    this.enqueueFollowUpMessage(message);
+  }
+
   dequeueLastSteeringMessage(): AgentMessage | undefined {
     return this.runtime.dequeueLastSteeringMessage();
   }
@@ -99,15 +134,55 @@ export class Agent<CALL_OPTIONS = never> {
     return this.runtime.dequeueLastFollowUpMessage();
   }
 
+  clearSteeringQueue(): void {
+    this.runtime.clearSteeringQueue();
+  }
+
+  clearFollowUpQueue(): void {
+    this.runtime.clearFollowUpQueue();
+  }
+
+  clearAllQueues(): void {
+    this.runtime.clearAllQueues();
+  }
+
+  abort(): void {
+    this.runtime.abort();
+  }
+
+  waitForIdle(): Promise<void> {
+    return this.runningPrompt ?? Promise.resolve();
+  }
+
+  reset(): void {
+    this.runtime.reset();
+  }
+
   async prompt(
     input: string | ModelMessage[],
     options: AgentCallOptions<CALL_OPTIONS> = {}
   ): Promise<void> {
-    await this.runtime.prompt(input, options);
+    const run = this.runtime.prompt(input, options);
+    this.runningPrompt = run;
+    try {
+      await run;
+    } finally {
+      if (this.runningPrompt === run) {
+        this.runningPrompt = undefined;
+      }
+    }
   }
 
   async continue(options: AgentCallOptions<CALL_OPTIONS> = {}): Promise<void> {
-    await this.runtime.continue(options);
+    const run = this.runtime.continue(options);
+    this.runningPrompt = run;
+    try {
+      await run;
+    } finally {
+      if (this.runningPrompt === run) {
+        this.runningPrompt = undefined;
+      }
+    }
   }
 
   async loadSession(): Promise<SessionTree> {
@@ -125,7 +200,7 @@ export class Agent<CALL_OPTIONS = never> {
       if (event.type !== "message_end") {
         return;
       }
-      void this.appendMessage(event.message);
+      void this.recordMessage(event.message);
     });
   }
 
@@ -134,15 +209,16 @@ export class Agent<CALL_OPTIONS = never> {
     this.unsubscribe = undefined;
   }
 
-  private async appendMessage(message: AgentMessage): Promise<void> {
+  private async recordMessage(message: AgentMessage): Promise<void> {
     if (!this.store) {
       return;
     }
-    const entry: SessionEntry = {
+    const entry: SessionMessageEntry = {
+      type: "message",
       id: randomUUID(),
-      parentId: this.lastEntryId,
+      parentId: this.lastEntryId ?? null,
       message,
-      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     };
     this.lastEntryId = entry.id;
     await this.store.append(entry);

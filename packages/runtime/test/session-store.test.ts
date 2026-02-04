@@ -13,9 +13,11 @@ describe("InMemorySessionStore", () => {
   it("appends entries to the tree", async () => {
     const store = new InMemorySessionStore();
     await store.append({
+      type: "message",
       id: "1",
+      parentId: null,
+      timestamp: new Date(0).toISOString(),
       message: { role: "user", content: "Hello" },
-      createdAt: new Date(0).toISOString(),
     });
 
     const result = await store.load();

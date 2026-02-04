@@ -22,89 +22,88 @@
 
 ## Phases
 
-### Phase 0: Repo Skeleton (Bun)
+### Phase 0: Repo Skeleton (Bun) — ✅ Complete
 
 - Create Bun workspace root configs and shared tsconfig.
 - Add package scaffolds with `src/index.ts` placeholders.
 - Wire basic build/typecheck scripts.
 
-### Phase 1: Agent (AI SDK v6)
+### Phase 1: Agent (AI SDK v6) — ✅ Complete
 
 - Define `AgentMessage`, `AgentEvent`, and session tree.
 - Implement AI SDK v6 `ToolLoopAgent` wrapper.
 - Add tool registry + execution policies + event emission.
 - Add compaction hooks and context transformers.
 
-### Phase 2: Sessions + Policy (Runtime)
+### Phase 2: Sessions + Policy (Runtime) — ⚠️ Partial
 
-- Implement `Agent` wrapper with session recording (`SessionStore`).
-- Resource loading (skills/prompts/extensions), settings/auth.
-- Session restore and model fallback logic.
+Implemented: session recording (`SessionStore`), JSONL `SessionManager`, compaction helpers, resource loader (skills/prompts/context), auth store, model registry, config helpers.
+Remaining: settings manager, session policy features (fork/switch/goto/retry/backoff), auto-compaction/overflow handling, model fallback logic.
 
-### Phase 3: TUI (OpenTUI Wrapper)
+### Phase 3: TUI (OpenTUI Wrapper) — ❌ Pending
 
 - Implemented inside `packages/coding-agent/src/tui/`.
 - Renderer bootstrap, message list, input/editor.
 - Event stream to renderable mapping.
 - Overlays, status/footer, and keybindings.
 
-### Phase 4: Coding Agent CLI
+### Phase 4: Coding Agent CLI — ⚠️ Partial
 
 - CLI entry + mode router.
 - Interactive TUI mode.
 - Print/JSON mode.
 - RPC mode.
 
-### Phase 5: Subagents (Optional Feature)
+### Phase 5: Subagents (Optional Feature) — ⚠️ Partial
 
-- Shared-memory store with explicit access rules.
-- Delegation tool for spawning subagents with restricted tools.
-- Optional parallel orchestration policy.
+Implemented: shared-memory store + delegation tool for spawning subagents.
+Remaining: explicit access rules + parallel orchestration policy.
 
-### Phase 6: Docs + Examples
+### Phase 6: Docs + Examples — ⚠️ In Progress
 
 - Quick start and configuration.
 - Tooling, extensions, skills.
 - Subagent usage patterns.
 - Agent embedding examples.
 
-## Core Parity Gaps vs pi-mono (Focus Areas 1–4)
+## Core Parity Gaps vs pi-mono (Updated)
 
-**1. Runtime loop + tools** (Phase 1)
+**1. Runtime loop + tools**
 
-- Steering and follow-up message queues (one-at-a-time vs all).
-- Thinking levels and per-level budgets.
-- Custom stream function hook for proxy/backends.
-- Session ID propagation for provider caching.
-- Dynamic API key resolution hook.
-- Richer agent state (current stream message, pending tool calls).
+- ✅ Steering and follow-up message queues (one-at-a-time vs all).
+- ⚠️ Thinking levels and per-level budgets (provider mapping pending).
+- ✅ Custom stream function hook for proxy/backends.
+- ⚠️ Session ID propagation for provider caching (mapping pending).
+- ✅ Dynamic API key resolution hook + headers.
+- ✅ Richer agent state (current stream message, pending tool calls).
+- ✅ Streaming event fidelity (full stream parts).
+- ✅ Grep/find tools.
 
-**2. Session model** (Phase 2)
+**2. Session model**
 
-- JSONL session manager with tree/branching model.
-- Resume/fork/tree navigation workflows.
-- Compaction pipeline (manual + automatic).
-- Session metadata (labels, display names, model changes).
-- Export to HTML/JSONL.
+- ✅ JSONL session manager with tree/branching model.
+- ✅ Session metadata (labels, session name, model changes).
+- ⚠️ Compaction pipeline (manual only; auto-compact pending).
+- ❌ Resume/fork/tree navigation workflows (CLI).
+- ❌ Export to HTML.
 
-**3. Provider/auth/model registry** (Phase 2)
+**3. Provider/auth/model registry**
 
-- Provider registry with tool-capable model list.
-- Auth storage + OAuth-based login flows.
-- Model selection and fallback logic.
-- Provider-specific options/config resolution.
+- ✅ Model registry + auth storage helpers.
+- ❌ OAuth-based login flows + provider discovery.
+- ❌ Model selection and fallback logic.
+- ❌ Provider-specific options/config resolution.
 
-**4. Resources/customization** (Phase 3)
+**4. Resources/customization**
 
-- Resource loader for skills, prompts, extensions, themes.
-- Context file discovery (`AGENTS.md`, `SYSTEM.md`, append flows).
-- Extension API (tool interception/override, events, commands, UI hooks).
-- Prompt templates and package discovery/install.
+- ✅ Resource loader for skills/prompts/context files + append system prompts.
+- ❌ Extensions/themes and tool interception hooks.
+- ❌ Prompt template discovery/install.
 
-#### Future examples backlog (post-feature work)
+#### Examples status
 
-- Skills/prompts/extensions loading and override hooks.
-- Session resume/listing with persistent stores and parent links.
-- Model registry, provider selection, and fallback behavior.
-- Tool approval/safety gates and tool override patterns.
-- CLI modes (print/json/rpc) and session workflows.
+- ✅ Session recording, session manager, compaction, resource loader examples.
+- ✅ Model registry/auth store usage example.
+- ❌ Session resume/fork/listing workflows.
+- ❌ Tool approval/safety gates and override patterns.
+- ❌ CLI RPC mode example.

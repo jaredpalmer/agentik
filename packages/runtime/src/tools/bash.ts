@@ -22,6 +22,15 @@ export type BashToolOptions = {
   env?: NodeJS.ProcessEnv;
 };
 
+export type BashToolDetails = {
+  command: string;
+  cwd: string;
+  exitCode: number | null;
+  truncated: boolean;
+  fullOutputPath?: string;
+  durationMs: number;
+};
+
 export function createBashTool(
   cwd: string,
   options: BashToolOptions = {}
@@ -33,6 +42,7 @@ export function createBashTool(
     inputSchema: bashSchema,
     execute: async (input) => {
       return new Promise((resolve, reject) => {
+        const startedAt = Date.now();
         const child = spawn(input.command, {
           cwd,
           env: { ...process.env, ...options.env },
@@ -80,7 +90,16 @@ export function createBashTool(
           }
 
           text = `Exit code: ${code ?? "unknown"}\n\n${text}`.trim();
-          resolve({ output: text });
+          resolve({
+            output: text,
+            ui: {
+              command: input.command,
+              cwd,
+              exitCode: code,
+              truncated: truncation.truncated,
+              durationMs: Date.now() - startedAt,
+            } satisfies BashToolDetails,
+          });
         });
       });
     },

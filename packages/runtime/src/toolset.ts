@@ -16,6 +16,7 @@ export type ToolEventHandlers = {
     result: AgentToolResult;
     isError: boolean;
   }) => void;
+  shouldSkip?: () => false | { reason?: string };
 };
 
 type ToolExecuteResult<OUTPUT, UI> =
@@ -117,6 +118,23 @@ function executeTool<INPUT, OUTPUT, UI>(
     toolName: definition.name,
     input,
   });
+
+  const skip = handlers?.shouldSkip?.();
+  if (skip) {
+    const result = {
+      output: {
+        skipped: true,
+        reason: skip.reason ?? "Skipped by runtime.",
+      },
+    } as AgentToolResult<OUTPUT, UI>;
+    handlers?.onEnd?.({
+      toolCallId: options.toolCallId,
+      toolName: definition.name,
+      result,
+      isError: true,
+    });
+    return result.output;
+  }
 
   try {
     const result = definition.execute(input, options) as ToolExecuteResult<OUTPUT, UI>;

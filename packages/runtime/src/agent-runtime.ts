@@ -1,9 +1,10 @@
 import {
   ToolLoopAgent,
   type LanguageModel,
+  type PrepareStepFunction,
   type StreamTextTransform,
   type TextStreamPart,
-  type ToolChoice,
+  type ToolLoopAgentOnFinishCallback,
   type ToolLoopAgentOnStepFinishCallback,
   stepCountIs,
   type StopCondition,
@@ -12,11 +13,14 @@ import {
 import type { ModelMessage, SystemModelMessage } from "@ai-sdk/provider-utils";
 import type {
   AgentCallOptions,
+  AgentConfig,
   AgentEvent,
   AgentMessage,
-  AgentRuntimeOptions,
   AgentState,
   QueueMode,
+  ResolveModelOptions,
+  ThinkingBudgets,
+  ThinkingLevel,
 } from "./types";
 import { defaultConvertToModelMessages } from "./message-utils";
 import { createToolSet } from "./toolset";
@@ -31,13 +35,17 @@ export class AgentRuntime<CALL_OPTIONS = never> {
     messages: AgentMessage[],
     signal?: AbortSignal
   ) => PromiseLike<AgentMessage[]>;
-  private toolChoice?: ToolChoice<Record<string, unknown>>;
-  private stopWhen?: AgentRuntimeOptions["stopWhen"];
-  private output?: unknown;
-  private providerOptions?: unknown;
-  private callSettings?: unknown;
+  private toolChoice?: AgentConfig["toolChoice"];
+  private stopWhen?: AgentConfig["stopWhen"];
+  private output?: AgentConfig["output"];
+  private providerOptions?: AgentConfig["providerOptions"];
+  private callSettings?: AgentConfig["callSettings"];
+  private prepareStep?: PrepareStepFunction<ToolSet>;
+  private prepareCall?: AgentConfig<CALL_OPTIONS>["prepareCall"];
+  private callOptionsSchema?: AgentConfig<CALL_OPTIONS>["callOptionsSchema"];
+  private onFinish?: ToolLoopAgentOnFinishCallback<ToolSet>;
   private onEvent?: (event: AgentEvent) => void;
-  private experimental_transform?:
+  private experimentalTransform?:
     | StreamTextTransform<ToolSet>
     | Array<StreamTextTransform<ToolSet>>;
   private onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
@@ -46,13 +54,32 @@ export class AgentRuntime<CALL_OPTIONS = never> {
   private steeringMode: QueueMode;
   private followUpMode: QueueMode;
   private pendingSteeringMessages: AgentMessage[] | null = null;
+  private loopStrategy: "tool-loop-agent" | "manual";
+  private sessionId?: string;
+  private thinkingLevel?: ThinkingLevel;
+  private thinkingBudgets?: ThinkingBudgets;
+  private maxRetryDelayMs?: number;
+  private resolveModel?: (
+    options: ResolveModelOptions<CALL_OPTIONS>
+  ) => LanguageModel | PromiseLike<LanguageModel>;
+  private thinkingAdapter?: AgentConfig<CALL_OPTIONS>["thinkingAdapter"];
+  private getApiKey?: AgentConfig<CALL_OPTIONS>["getApiKey"];
+  private apiKeyHeaders?: AgentConfig<CALL_OPTIONS>["apiKeyHeaders"];
+  private streamFn?: AgentConfig<CALL_OPTIONS>["streamFn"];
+  private skipToolCalls = false;
+  private activeAbortController?: AbortController;
 
-  constructor(options: AgentRuntimeOptions) {
+  constructor(options: AgentConfig<CALL_OPTIONS>) {
     this.stateInternal = {
       instructions: options.instructions,
       model: options.model,
+      thinkingLevel: options.thinkingLevel,
+      thinkingBudgets: options.thinkingBudgets,
+      sessionId: options.sessionId,
       tools: options.tools ?? [],
       messages: [],
+      streamMessage: null,
+      pendingToolCalls: new Set<string>(),
       isStreaming: false,
     };
     this.toolChoice = options.toolChoice;
@@ -60,8 +87,24 @@ export class AgentRuntime<CALL_OPTIONS = never> {
     this.output = options.output;
     this.providerOptions = options.providerOptions;
     this.callSettings = options.callSettings;
+    this.prepareStep = options.prepareStep;
+    this.prepareCall = options.prepareCall;
+    this.callOptionsSchema = options.callOptionsSchema;
+    this.onStepFinish = options.onStepFinish;
+    this.onFinish = options.onFinish;
+    this.experimentalTransform = options.experimental_transform;
     this.steeringMode = options.steeringMode ?? "one-at-a-time";
     this.followUpMode = options.followUpMode ?? "one-at-a-time";
+    this.loopStrategy = options.loopStrategy ?? "tool-loop-agent";
+    this.sessionId = options.sessionId;
+    this.thinkingLevel = options.thinkingLevel;
+    this.thinkingBudgets = options.thinkingBudgets;
+    this.maxRetryDelayMs = options.maxRetryDelayMs;
+    this.resolveModel = options.resolveModel;
+    this.thinkingAdapter = options.thinkingAdapter;
+    this.getApiKey = options.getApiKey;
+    this.apiKeyHeaders = options.apiKeyHeaders;
+    this.streamFn = options.streamFn;
     this.convertToModelMessages = options.convertToModelMessages ?? defaultConvertToModelMessages;
     this.transformContext = options.transformContext;
     this.onEvent = options.onEvent;
@@ -84,12 +127,27 @@ export class AgentRuntime<CALL_OPTIONS = never> {
     this.stateInternal.model = model;
   }
 
-  setTools(tools: AgentRuntimeOptions["tools"]): void {
+  setTools(tools: AgentConfig["tools"]): void {
     this.stateInternal.tools = tools ?? [];
   }
 
-  setToolChoice(choice?: ToolChoice<Record<string, unknown>>): void {
+  setToolChoice(choice?: AgentConfig["toolChoice"]): void {
     this.toolChoice = choice;
+  }
+
+  setThinkingLevel(level?: ThinkingLevel): void {
+    this.thinkingLevel = level;
+    this.stateInternal.thinkingLevel = level;
+  }
+
+  setThinkingBudgets(budgets?: ThinkingBudgets): void {
+    this.thinkingBudgets = budgets;
+    this.stateInternal.thinkingBudgets = budgets;
+  }
+
+  setSessionId(sessionId?: string): void {
+    this.sessionId = sessionId;
+    this.stateInternal.sessionId = sessionId;
   }
 
   setTransform(
@@ -104,12 +162,28 @@ export class AgentRuntime<CALL_OPTIONS = never> {
     this.convertToModelMessages = convert ?? defaultConvertToModelMessages;
   }
 
+  replaceMessages(messages: AgentMessage[]): void {
+    this.stateInternal.messages = messages.slice();
+  }
+
+  appendMessage(message: AgentMessage): void {
+    this.appendMessages([message]);
+  }
+
+  clearMessages(): void {
+    this.stateInternal.messages = [];
+  }
+
   getSteeringMode(): QueueMode {
     return this.steeringMode;
   }
 
   setSteeringMode(mode: QueueMode): void {
     this.steeringMode = mode;
+  }
+
+  getLoopStrategy(): "tool-loop-agent" | "manual" {
+    return this.loopStrategy;
   }
 
   getFollowUpMode(): QueueMode {
@@ -129,6 +203,9 @@ export class AgentRuntime<CALL_OPTIONS = never> {
 
   enqueueSteeringMessage(input: string | AgentMessage | Array<string | AgentMessage>): void {
     this.enqueueMessages(this.steeringQueue, input);
+    if (this.stateInternal.isStreaming) {
+      this.skipToolCalls = true;
+    }
   }
 
   enqueueFollowUpMessage(input: string | AgentMessage | Array<string | AgentMessage>): void {
@@ -141,6 +218,34 @@ export class AgentRuntime<CALL_OPTIONS = never> {
 
   dequeueLastFollowUpMessage(): AgentMessage | undefined {
     return this.followUpQueue.pop();
+  }
+
+  clearSteeringQueue(): void {
+    this.steeringQueue = [];
+  }
+
+  clearFollowUpQueue(): void {
+    this.followUpQueue = [];
+  }
+
+  clearAllQueues(): void {
+    this.steeringQueue = [];
+    this.followUpQueue = [];
+  }
+
+  abort(): void {
+    this.activeAbortController?.abort();
+  }
+
+  reset(): void {
+    this.stateInternal.messages = [];
+    this.stateInternal.streamMessage = null;
+    this.stateInternal.pendingToolCalls.clear();
+    this.stateInternal.isStreaming = false;
+    this.stateInternal.error = undefined;
+    this.clearAllQueues();
+    this.skipToolCalls = false;
+    this.pendingSteeringMessages = null;
   }
 
   async prompt(
@@ -176,6 +281,10 @@ export class AgentRuntime<CALL_OPTIONS = never> {
     this.stateInternal.error = undefined;
     this.emit({ type: "agent_start" });
 
+    const abortController = options.abortSignal ? undefined : new AbortController();
+    this.activeAbortController = abortController;
+    const abortSignal = options.abortSignal ?? abortController?.signal;
+
     let pendingMessages: AgentMessage[] = newMessages;
 
     try {
@@ -184,7 +293,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
           this.appendMessages(pendingMessages);
         }
 
-        await this.runOnce(options);
+        await this.runOnce({ ...options, abortSignal });
 
         const steeringMessages = this.pendingSteeringMessages ?? this.takeSteeringMessages();
         this.pendingSteeringMessages = null;
@@ -209,6 +318,9 @@ export class AgentRuntime<CALL_OPTIONS = never> {
       throw error;
     } finally {
       this.stateInternal.isStreaming = false;
+      this.stateInternal.streamMessage = null;
+      this.stateInternal.pendingToolCalls.clear();
+      this.activeAbortController = undefined;
     }
   }
 
@@ -241,6 +353,9 @@ export class AgentRuntime<CALL_OPTIONS = never> {
       if (options.toolCallId) {
         startedToolCalls.add(options.toolCallId);
       }
+      if (options.toolCallId) {
+        this.stateInternal.pendingToolCalls.add(options.toolCallId);
+      }
       this.emit({
         type: "tool_execution_start",
         toolCallId: options.toolCallId ?? "",
@@ -262,6 +377,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
       },
       onEnd: ({ toolCallId, toolName, result, isError }) => {
         endedToolCalls.add(toolCallId);
+        this.stateInternal.pendingToolCalls.delete(toolCallId);
         this.emit({
           type: "tool_execution_end",
           toolCallId,
@@ -270,6 +386,12 @@ export class AgentRuntime<CALL_OPTIONS = never> {
           isError,
         });
       },
+      shouldSkip: () =>
+        this.skipToolCalls
+          ? {
+              reason: "Skipped due to queued user message.",
+            }
+          : false,
     });
 
     const agent = new ToolLoopAgent<CALL_OPTIONS, ToolSet>({
@@ -280,23 +402,39 @@ export class AgentRuntime<CALL_OPTIONS = never> {
       stopWhen: this.buildStopWhen() as never,
       output: this.output as never,
       providerOptions: this.providerOptions as never,
+      prepareStep: this.buildPrepareStep(),
+      prepareCall: this.buildPrepareCall(),
+      callOptionsSchema: this.callOptionsSchema,
+      onStepFinish: this.onStepFinish as never,
+      onFinish: this.onFinish as never,
       ...(this.callSettings as Record<string, unknown> | undefined),
     });
 
-    const result = await agent.stream({
+    const timeout = this.resolveTimeout(options.timeout);
+    const experimentalTransform = options.experimental_transform ?? this.experimentalTransform;
+
+    const streamParams = {
       messages: modelMessages,
       ...(options.options === undefined ? {} : { options: options.options as CALL_OPTIONS }),
       abortSignal: options.abortSignal,
-      timeout: options.timeout,
-      experimental_transform: this.experimental_transform,
-      onStepFinish: this.onStepFinish as never,
-    });
+      timeout,
+      experimental_transform: experimentalTransform,
+      onStepFinish: options.onStepFinish as never,
+    } as const;
+
+    const result = this.streamFn
+      ? await this.streamFn({ agent, params: streamParams })
+      : await agent.stream(streamParams);
 
     let currentAssistant: AgentMessage | null = null;
     let currentToolResults: unknown[] = [];
     let lastAssistant: AgentMessage | null = null;
 
+    this.skipToolCalls = false;
+
     for await (const streamPart of result.fullStream as AsyncIterable<StreamPart>) {
+      this.emit({ type: "stream_part", part: streamPart });
+
       switch (streamPart.type) {
         case "start-step":
           this.emit({ type: "turn_start" });
@@ -312,6 +450,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
           break;
         case "text-start":
           currentAssistant = { role: "assistant", content: "" };
+          this.stateInternal.streamMessage = currentAssistant;
           this.emit({ type: "message_start", message: currentAssistant });
           break;
         case "text-delta":
@@ -319,6 +458,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
             currentAssistant.content += streamPart.text ?? "";
           }
           if (currentAssistant) {
+            this.stateInternal.streamMessage = currentAssistant;
             this.emit({
               type: "message_update",
               message: currentAssistant,
@@ -329,6 +469,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         case "text-end":
           if (currentAssistant) {
             lastAssistant = currentAssistant;
+            this.stateInternal.streamMessage = null;
             this.emit({ type: "message_end", message: currentAssistant });
           }
           break;
@@ -342,6 +483,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         case "tool-result":
           currentToolResults.push(streamPart);
           if (streamPart.toolCallId && !endedToolCalls.has(streamPart.toolCallId)) {
+            this.stateInternal.pendingToolCalls.delete(streamPart.toolCallId);
             this.emit({
               type: "tool_execution_end",
               toolCallId: streamPart.toolCallId,
@@ -354,6 +496,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         case "tool-error":
           currentToolResults.push(streamPart);
           if (streamPart.toolCallId && !endedToolCalls.has(streamPart.toolCallId)) {
+            this.stateInternal.pendingToolCalls.delete(streamPart.toolCallId);
             this.emit({
               type: "tool_execution_end",
               toolCallId: streamPart.toolCallId,
@@ -366,6 +509,7 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         case "tool-output-denied":
           currentToolResults.push(streamPart);
           if (streamPart.toolCallId && !endedToolCalls.has(streamPart.toolCallId)) {
+            this.stateInternal.pendingToolCalls.delete(streamPart.toolCallId);
             this.emit({
               type: "tool_execution_end",
               toolCallId: streamPart.toolCallId,
@@ -421,6 +565,158 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         message: lastAssistant,
       });
     }
+  }
+
+  private resolveTimeout(
+    timeout: AgentCallOptions<CALL_OPTIONS>["timeout"]
+  ): AgentCallOptions<CALL_OPTIONS>["timeout"] {
+    if (timeout != null) {
+      return timeout;
+    }
+    if (this.maxRetryDelayMs != null && this.maxRetryDelayMs > 0) {
+      return { stepMs: this.maxRetryDelayMs };
+    }
+    return undefined;
+  }
+
+  private buildPrepareStep(): PrepareStepFunction<ToolSet> | undefined {
+    if (!this.prepareStep && !this.resolveModel && !this.thinkingAdapter) {
+      return undefined;
+    }
+
+    return async (options) => {
+      const base = (await this.prepareStep?.(options)) ?? {};
+      const model = base.model ?? options.model;
+      let resolvedModel = model;
+      if (this.resolveModel) {
+        resolvedModel = await this.resolveModel({
+          model,
+          sessionId: this.sessionId,
+        });
+      }
+
+      let providerOptions = base.providerOptions;
+      if (this.thinkingAdapter) {
+        const adapted = this.thinkingAdapter({
+          providerOptions,
+          thinkingLevel: this.thinkingLevel,
+          thinkingBudgets: this.thinkingBudgets,
+          sessionId: this.sessionId,
+        });
+        providerOptions = adapted ?? providerOptions;
+      }
+
+      return {
+        ...base,
+        model: resolvedModel,
+        ...(providerOptions ? { providerOptions } : {}),
+      };
+    };
+  }
+
+  private buildPrepareCall(): AgentConfig<CALL_OPTIONS>["prepareCall"] | undefined {
+    if (!this.prepareCall && !this.resolveModel && !this.thinkingAdapter && !this.getApiKey) {
+      return undefined;
+    }
+
+    return async (settings) => {
+      const base = (await this.prepareCall?.(settings)) ?? settings;
+      let model = base.model;
+      if (this.resolveModel) {
+        model = await this.resolveModel({
+          model,
+          sessionId: this.sessionId,
+          callOptions: (settings as { options?: CALL_OPTIONS }).options,
+        });
+      }
+
+      let providerOptions = base.providerOptions;
+      if (this.thinkingAdapter) {
+        const adapted = this.thinkingAdapter({
+          providerOptions,
+          thinkingLevel: this.thinkingLevel,
+          thinkingBudgets: this.thinkingBudgets,
+          sessionId: this.sessionId,
+        });
+        providerOptions = adapted ?? providerOptions;
+      }
+
+      const apiKeyHeaders = await this.resolveApiKeyHeaders(model);
+      const headers = this.mergeHeaders(base.headers, apiKeyHeaders);
+
+      return {
+        ...base,
+        model,
+        ...(providerOptions ? { providerOptions } : {}),
+        ...(headers ? { headers } : {}),
+      };
+    };
+  }
+
+  private mergeHeaders(
+    base: Record<string, string | undefined> | undefined,
+    extra: Record<string, string> | undefined
+  ): Record<string, string | undefined> | undefined {
+    if (!extra) {
+      return base;
+    }
+    return { ...(base ?? {}), ...extra };
+  }
+
+  private getModelIdentity(model: LanguageModel): { providerId?: string; modelId?: string } {
+    if (typeof model === "string") {
+      if (model.includes("/")) {
+        const [providerId, modelId] = model.split("/", 2);
+        return { providerId, modelId };
+      }
+      if (model.includes(":")) {
+        const [providerId, modelId] = model.split(":", 2);
+        return { providerId, modelId };
+      }
+      return { modelId: model };
+    }
+
+    if (model && typeof model === "object" && "provider" in model && "modelId" in model) {
+      const typed = model as { provider?: string; modelId?: string };
+      return { providerId: typed.provider, modelId: typed.modelId };
+    }
+
+    return {};
+  }
+
+  private async resolveApiKeyHeaders(
+    model: LanguageModel
+  ): Promise<Record<string, string> | undefined> {
+    if (!this.getApiKey) {
+      return undefined;
+    }
+
+    const { providerId, modelId } = this.getModelIdentity(model);
+    if (!providerId) {
+      return undefined;
+    }
+
+    const apiKey = await this.getApiKey(providerId, modelId);
+    if (!apiKey) {
+      return undefined;
+    }
+
+    if (this.apiKeyHeaders) {
+      return this.apiKeyHeaders({ providerId, modelId, apiKey }) ?? undefined;
+    }
+
+    const normalized = providerId.toLowerCase();
+    if (normalized.includes("anthropic")) {
+      return { "x-api-key": apiKey };
+    }
+    if (normalized.includes("openai") || normalized.includes("openrouter")) {
+      return { Authorization: `Bearer ${apiKey}` };
+    }
+    if (normalized.includes("azure")) {
+      return { "api-key": apiKey };
+    }
+
+    return { Authorization: `Bearer ${apiKey}` };
   }
 
   private buildStopWhen(): StopCondition<ToolSet> | Array<StopCondition<ToolSet>> | undefined {

@@ -38,7 +38,7 @@ await agent.prompt("Summarize the README.");
 
 **Separation of concerns**
 
-The runtime is intentionally “dumb” and deterministic: it runs the loop, executes tools, and emits events. Session recording is optional and done via a `SessionStore` that you pass to `Agent`. This keeps the runtime reusable and testable while still letting you layer in persistence when you need it.
+The runtime is intentionally “dumb” and deterministic: it runs the loop, executes tools, and emits events. Session recording is optional and done via a `SessionStore` that you pass to `Agent`. This keeps the runtime reusable and testable while still letting you layer in persistence when you need it. Optional helpers include a JSONL `SessionManager`, compaction utilities, a resource loader for skills/prompts, and small auth/model registries.
 
 **Queued messages (steering vs follow-up)**
 
@@ -75,6 +75,91 @@ const agent = new Agent({
 
 await agent.prompt("List the repo packages.");
 ```
+
+## Session manager (JSONL)
+
+If you want pi-style JSONL sessions with tree/branching, use `SessionManager`. It owns session files and can build LLM-ready context from the current leaf.
+
+```ts
+import { SessionManager } from "@agentik/runtime";
+
+const sessions = new SessionManager({
+  cwd: process.cwd(),
+  sessionDir: ".agentik-example/sessions",
+  persist: true,
+});
+
+sessions.appendMessage({ role: "user", content: "Hello from JSONL." });
+sessions.appendMessage({ role: "assistant", content: "Stored in the session file." });
+
+const context = sessions.buildSessionContext();
+console.log(context.messages.length);
+console.log("Session file:", sessions.getSessionFile());
+```
+
+## Compaction utilities
+
+Compaction helpers are available as pure functions so you can wire them into your own policy.
+
+```ts
+import { compact } from "@agentik/runtime";
+
+const result = await compact({
+  entries: sessions.getEntries(),
+  leafId: sessions.getLeafId(),
+  contextWindow: 2000,
+  summarize: async (messages) => `Summary of ${messages.length} messages.`,
+});
+
+if (result) {
+  sessions.appendCompaction(result.summary, result.firstKeptEntryId, result.tokensBefore);
+}
+```
+
+## Dynamic auth + proxy streaming
+
+Use `getApiKey` to resolve short-lived tokens and `streamFn` to wrap or proxy the AI SDK stream.
+
+```ts
+import { Agent } from "@agentik/runtime";
+
+const agent = new Agent({
+  model,
+  getApiKey: async (providerId) => process.env[`${providerId.toUpperCase()}_API_KEY`],
+  apiKeyHeaders: ({ apiKey }) => ({ "x-api-key": apiKey }), // customize per provider
+  streamFn: async ({ agent, params }) => agent.stream(params),
+});
+```
+
+## Auth store + model registry
+
+Use `AuthStore` to persist API keys and `ModelRegistry` to register models with metadata and factories.
+
+```ts
+import { InMemoryAuthStore, ModelRegistry } from "@agentik/runtime";
+
+const authStore = new InMemoryAuthStore();
+await authStore.set("provider-id", "api-key");
+
+const registry = new ModelRegistry(authStore);
+registry.registerModel({
+  id: "fast-model",
+  providerId: "provider-id",
+  // createProviderModel = provider factory from your AI SDK package
+  createModel: ({ apiKey }) => createProviderModel({ apiKey }),
+  contextWindow: 128000,
+});
+
+const model = await registry.resolveModel("fast-model");
+```
+
+## Built-in tools
+
+`@agentik/runtime` ships a small built-in toolset:
+
+- `read`, `write`, `edit`, `update`
+- `list`, `glob`, `find`, `grep`
+- `bash`, `webfetch`
 
 ## Examples
 
@@ -161,21 +246,32 @@ const agent = new Agent({
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { SubagentManager, SharedMemoryStore, createReadTool } from "@agentik/runtime";
+import {
+  SubagentRegistry,
+  SharedMemoryStore,
+  createReadTool,
+  createSubagentTool,
+  Agent,
+} from "@agentik/runtime";
 
 const sharedMemory = new SharedMemoryStore();
-const manager = new SubagentManager({
-  enabled: true,
-  maxAgents: 2,
-  sharedMemory,
-  baseRuntimeOptions: {
+const registry = new SubagentRegistry();
+registry.register({
+  id: "explorer",
+  config: {
     model: anthropic("claude-opus-4-5"),
     tools: [createReadTool(process.cwd())],
   },
+  memory: sharedMemory,
 });
 
-const explorer = manager.create({ id: "explorer" });
-await explorer.runtime.prompt("Scan the repo for TODOs.");
+const explorerTool = createSubagentTool({ id: "explorer", registry });
+const agent = new Agent({
+  model: anthropic("claude-opus-4-5"),
+  tools: [explorerTool],
+});
+
+await agent.prompt("Delegate to explorer: scan the repo for TODOs.");
 sharedMemory.set("todos", "Captured in explorer output.");
 ```
 

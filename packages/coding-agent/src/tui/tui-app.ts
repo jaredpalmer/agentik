@@ -452,6 +452,9 @@ export class TuiApp {
         this.render();
         break;
       }
+      case "stream_part": {
+        break;
+      }
       case "tool_execution_update": {
         const existing = this.toolCallEntries.get(event.toolCallId);
         const index =

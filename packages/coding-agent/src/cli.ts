@@ -3,6 +3,8 @@ import {
   Agent,
   createBashTool,
   createEditTool,
+  createFindTool,
+  createGrepTool,
   createGlobTool,
   createListTool,
   createReadTool,
@@ -40,6 +42,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     createUpdateTool(cwd),
     createListTool(cwd),
     createGlobTool(cwd),
+    createFindTool(cwd),
+    createGrepTool(cwd),
     createBashTool(cwd),
     createWebFetchTool(),
   ] as AgentToolDefinition[];
