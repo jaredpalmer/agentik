@@ -1,82 +1,79 @@
 # Agentik
 
-Agentik’s goal is to make building coding agents feel boring and composable: a small, deterministic runtime, a higher-level SDK for sessions and policy, and a minimal CLI that acts as a reference client. You can embed the SDK in your own product, or use the runtime directly when you want full control without CLI assumptions.
+Agentik’s goal is to make building coding agents feel boring and composable: a small, deterministic runtime with optional session recording, and a minimal CLI that acts as a reference client. You can embed the runtime in your own product, or use the CLI when you want a ready-made interface.
 
 ## Architecture
 
-Agentik is intentionally split into three layers so you can adopt only what you need.
+Agentik is intentionally split into two layers so you can adopt only what you need.
 
 - `runtime`: A thin wrapper around AI SDK v6 `ToolLoopAgent` that owns the tool loop, emits a stable event stream, and provides a small set of built-in tools.
-- `sdk`: Session lifecycle and policy. This is where model selection, resource loading, and persistence live.
-- `cli`: A minimal reference client that wires runtime + sdk and demonstrates streaming, tool events, and UI rendering.
+- `cli`: A minimal reference client that wires the runtime into a TUI and demonstrates streaming, tool events, and UI rendering.
 
 **Packages**
 
 - `@agentik/runtime` (`packages/runtime`): core agent loop/runtime, tool calls, and event model built on AI SDK
-- `@agentik/sdk` (`packages/sdk`): agent sdk (session APIs and embedding helpers).
 - `@agentik/coding-agent` (`packages/coding-agent`): minimal agent CLI and TUI built on opentui
 
 ## Runtime
 
-`@agentik/runtime` is the thin loop around AI SDK v6 that owns tool execution and emits a structured event stream. It takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners) and exposes a small surface:
+`@agentik/runtime` is the thin loop around AI SDK v6 that owns tool execution and emits a structured event stream. The primary entrypoint is `Agent`, which takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners):
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { AgentRuntime, createReadTool, createWriteTool } from "@agentik/runtime";
+import { Agent, createReadTool, createWriteTool } from "@agentik/runtime";
 
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model: anthropic("claude-opus-4-5"),
   tools: [createReadTool(process.cwd()), createWriteTool(process.cwd())],
 });
 
-runtime.subscribe((event) => {
+agent.subscribe((event) => {
   if (event.type === "message_update") {
     process.stdout.write(event.delta);
   }
 });
 
-await runtime.prompt("Summarize the README.");
+await agent.prompt("Summarize the README.");
 ```
 
 **Separation of concerns**
 
-The runtime is intentionally “dumb” and deterministic: it runs the loop, executes tools, and emits events. The SDK is where environment-specific policy lives: model selection and fallbacks, resource loading, session storage/restore, and app-level wiring. This keeps the runtime reusable and testable, while the SDK stays flexible for different products and integrations.
+The runtime is intentionally “dumb” and deterministic: it runs the loop, executes tools, and emits events. Session recording is optional and done via a `SessionStore` that you pass to `Agent`. This keeps the runtime reusable and testable while still letting you layer in persistence when you need it.
 
 **Queued messages (steering vs follow-up)**
 
 Steering messages are injected before the next model turn, so they can redirect the loop at a turn boundary. Follow-up messages are appended after the current turn completes, so they do not change the in-flight turn. Each queue supports `one-at-a-time` or `all` modes.
 
 ```ts
-import { AgentRuntime } from "@agentik/runtime";
+import { Agent } from "@agentik/runtime";
 
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model,
   steeringMode: "one-at-a-time",
   followUpMode: "one-at-a-time",
 });
 
-runtime.enqueueSteeringMessage("Steer: ask before writing.");
-runtime.enqueueFollowUpMessage("Follow-up: add tests.");
+agent.enqueueSteeringMessage("Steer: ask before writing.");
+agent.enqueueFollowUpMessage("Follow-up: add tests.");
 
-await runtime.prompt("Start with a plan.");
+await agent.prompt("Start with a plan.");
 ```
 
-## SDK
+## Session recording
 
-`@agentik/sdk` builds on the runtime with session management and recording. `createAgentSession` wires a runtime, attaches a store, and starts capturing events as session entries.
+Provide a `SessionStore` to record `message_end` events as session entries.
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { createAgentSession, InMemorySessionStore } from "@agentik/sdk";
-import { createReadTool, createWriteTool } from "@agentik/runtime";
+import { Agent, InMemorySessionStore, createReadTool, createWriteTool } from "@agentik/runtime";
 
-const { session } = await createAgentSession({
+const agent = new Agent({
   model: anthropic("claude-opus-4-5"),
   tools: [createReadTool(process.cwd()), createWriteTool(process.cwd())],
   sessionStore: new InMemorySessionStore(),
 });
 
-await session.runtime.prompt("List the repo packages.");
+await agent.prompt("List the repo packages.");
 ```
 
 ## Examples
@@ -85,14 +82,14 @@ await session.runtime.prompt("List the repo packages.");
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { AgentRuntime, createBashTool, createReadTool } from "@agentik/runtime";
+import { Agent, createBashTool, createReadTool } from "@agentik/runtime";
 
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model: anthropic("claude-opus-4-5"),
   tools: [createReadTool(process.cwd()), createBashTool(process.cwd())],
 });
 
-runtime.subscribe((event) => {
+agent.subscribe((event) => {
   if (event.type === "tool_execution_start") {
     console.log(`[tool:start] ${event.toolName}`, event.args);
   }
@@ -101,7 +98,7 @@ runtime.subscribe((event) => {
   }
 });
 
-await runtime.prompt("Find TODOs and summarize them.");
+await agent.prompt("Find TODOs and summarize them.");
 ```
 
 **Define a custom tool**
@@ -132,8 +129,7 @@ const repoStatsTool: AgentToolDefinition<RepoStatsInput, string> = {
 
 ```ts
 import { readFile, writeFile } from "node:fs/promises";
-import { createAgentSession, type SessionStore } from "@agentik/sdk";
-import type { SessionEntry, SessionTree } from "@agentik/runtime";
+import { Agent, type SessionEntry, type SessionStore, type SessionTree } from "@agentik/runtime";
 
 class FileSessionStore implements SessionStore {
   constructor(private filePath: string) {}
@@ -154,7 +150,7 @@ class FileSessionStore implements SessionStore {
   }
 }
 
-const { session } = await createAgentSession({
+const agent = new Agent({
   model,
   tools,
   sessionStore: new FileSessionStore(".agentik/session.json"),
@@ -222,11 +218,11 @@ AGENTIK_VERSION=cli-v0.1.0 AGENTIK_INSTALL_DIR="$HOME/bin" ./install.sh
 
 **Why the CLI matters**
 
-The CLI is intentionally small and serves as a reference client. It shows how to wire `@agentik/runtime` tools into `@agentik/sdk`, stream runtime events, and render them in a UI. If you are embedding Agentik in your own app, `packages/coding-agent` is the shortest path to copy/paste the essentials.
+The CLI is intentionally small and serves as a reference client. It shows how to wire `@agentik/runtime` tools into `Agent`, stream runtime events, and render them in a UI. If you are embedding Agentik in your own app, `packages/coding-agent` is the shortest path to copy/paste the essentials.
 
 ## Use cases
 
-- Embed a coding agent into an existing product by composing the SDK with your own session store.
+- Embed a coding agent into an existing product by composing `Agent` with your own session store.
 - Build a CI or repo assistant that reviews diffs and emits structured tool events for auditing.
 - Prototype new tools (filesystem, webfetch, bash) against a stable runtime loop.
 - Create a custom TUI or web UI by subscribing to runtime events.
@@ -249,13 +245,6 @@ Yes. `@agentik/runtime` wraps `ToolLoopAgent` and focuses on event emission and 
 </details>
 
 <details>
-<summary>When should I use the runtime vs the SDK?</summary>
-
-Use `@agentik/runtime` when you want a simple, deterministic loop and plan to handle storage and policy yourself. Use `@agentik/sdk` when you want session recording, a storage abstraction, and a higher-level entry point.
-
-</details>
-
-<details>
 <summary>Can I use any AI SDK model/provider?</summary>
 
 Yes. Runtime expects an AI SDK `LanguageModel`, so any provider supported by AI SDK works.
@@ -265,7 +254,7 @@ Yes. Runtime expects an AI SDK `LanguageModel`, so any provider supported by AI 
 <details>
 <summary>Do I have to use the CLI?</summary>
 
-No. The CLI is intentionally minimal and acts as a reference client. You can embed the SDK or runtime directly in your own app.
+No. The CLI is intentionally minimal and acts as a reference client. You can embed `Agent` directly in your own app.
 
 </details>
 
@@ -279,7 +268,7 @@ Sessions are written through a simple `SessionStore` interface. The default in-m
 <details>
 <summary>Can I bring my own tools?</summary>
 
-Yes. Tools are plain `AgentToolDefinition` objects. Pass any tool list into the runtime or `createAgentSession`.
+Yes. Tools are plain `AgentToolDefinition` objects. Pass any tool list into `Agent`.
 
 </details>
 

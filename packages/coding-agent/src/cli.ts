@@ -1,5 +1,6 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import {
+  Agent,
   createBashTool,
   createEditTool,
   createGlobTool,
@@ -10,7 +11,6 @@ import {
   createWriteTool,
   type AgentToolDefinition,
 } from "@agentik/runtime";
-import { createAgentSession } from "@agentik/sdk";
 import { TuiApp } from "./tui/tui-app";
 import { pathToFileURL } from "node:url";
 
@@ -44,10 +44,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     createWebFetchTool(),
   ] as AgentToolDefinition[];
 
-  const { session } = await createAgentSession({ model, tools });
+  const agent = new Agent({ model, tools });
 
   if (mode === "interactive") {
-    const app = new TuiApp({ runtime: session.runtime });
+    const app = new TuiApp({ agent });
     await app.start();
     return;
   }
@@ -60,7 +60,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     throw new Error("--prompt is required in print mode.");
   }
 
-  session.runtime.subscribe((event) => {
+  agent.subscribe((event) => {
     if (event.type === "message_update") {
       process.stdout.write(event.delta);
       return;
@@ -71,7 +71,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     }
   });
 
-  await session.runtime.prompt(prompt);
+  await agent.prompt(prompt);
 }
 
 function parseMode(args: Set<string>): CliMode {

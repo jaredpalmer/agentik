@@ -1,4 +1,4 @@
-export { AgentRuntime } from "./agent-runtime";
+export { Agent, type AgentOptions } from "./agent";
 export {
   SharedMemoryStore,
   SubagentManager,
@@ -7,6 +7,7 @@ export {
   type SubagentManagerOptions,
   type SubagentOptions,
 } from "./subagents";
+export { InMemorySessionStore, type SessionStore } from "./session-store";
 export {
   type AgentCallOptions,
   type AgentEvent,

@@ -23,7 +23,7 @@ bun examples/runtime-builtin-tools-anthropic.ts
 - `runtime-steering-follow-up.ts`: queue steering vs follow-up messages (mock model).
 - `sdk-session-recording.ts`: record messages into an in-memory session store (mock model).
 - `sdk-file-session-store.ts`: persist session entries to a JSON file (mock model).
-- `sdk-instructions-and-events.ts`: set instructions and stream events via the SDK (mock model).
+- `sdk-instructions-and-events.ts`: set instructions and stream events via Agent (mock model).
 - `runtime-custom-tool.ts`: define and call a custom tool (real model required).
 - `runtime-builtin-tools-anthropic.ts`: use built-in list/read tools (real model required).
 - `subagents-shared-memory.ts`: create subagents with shared memory (mock model).

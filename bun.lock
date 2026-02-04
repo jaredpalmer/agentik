@@ -19,7 +19,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@agentik/runtime": "workspace:*",
-        "@agentik/sdk": "workspace:*",
         "@ai-sdk/anthropic": "^3.0.35",
         "@opentui/core": "^0.1.77",
       },
@@ -33,22 +32,11 @@
         "glob": "^10.3.10",
       },
     },
-    "packages/sdk": {
-      "name": "@agentik/sdk",
-      "version": "0.0.0",
-      "dependencies": {
-        "@agentik/runtime": "workspace:*",
-        "@ai-sdk/provider-utils": "^4.0.13",
-        "ai": "^6.0.68",
-      },
-    },
   },
   "packages": {
     "@agentik/coding-agent": ["@agentik/coding-agent@workspace:packages/coding-agent"],
 
     "@agentik/runtime": ["@agentik/runtime@workspace:packages/runtime"],
-
-    "@agentik/sdk": ["@agentik/sdk@workspace:packages/sdk"],
 
     "@ai-sdk/anthropic": ["@ai-sdk/anthropic@3.0.35", "", { "dependencies": { "@ai-sdk/provider": "3.0.7", "@ai-sdk/provider-utils": "4.0.13" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-Y3g/5uVj621XSB9lGF7WrD7qR+orhV5xpaYkRF8kfj2j4W7e7BBGIvxcdsCf85FjJbc6tKQdNTZ84ZEqT3Y5TQ=="],
 

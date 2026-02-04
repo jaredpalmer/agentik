@@ -1,15 +1,15 @@
-import { AgentRuntime } from "@agentik/runtime";
+import { Agent } from "@agentik/runtime";
 import { createMockModel } from "./mock-model";
 
 // Collect and print the event sequence emitted by the runtime.
 const events: string[] = [];
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model: createMockModel("Event log demo."),
   onEvent: (event) => {
     events.push(event.type);
   },
 });
 
-await runtime.prompt("Ping.");
+await agent.prompt("Ping.");
 
 console.log("Events:", events.join(" -> "));

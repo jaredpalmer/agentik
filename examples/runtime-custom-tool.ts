@@ -1,7 +1,6 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { jsonSchema } from "@ai-sdk/provider-utils";
-import type { AgentToolDefinition } from "@agentik/runtime";
-import { AgentRuntime } from "@agentik/runtime";
+import { Agent, type AgentToolDefinition } from "@agentik/runtime";
 
 // Example of defining a custom tool and letting the model call it.
 // Requires environment variables:
@@ -38,20 +37,20 @@ const wordCountTool: AgentToolDefinition<WordCountInput, WordCountOutput> = {
   },
 };
 
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model: anthropic(modelId),
   tools: [wordCountTool],
 });
 
 let toolCalls = 0;
-runtime.subscribe((event) => {
+agent.subscribe((event) => {
   if (event.type === "tool_execution_end") {
     toolCalls += 1;
     console.log("Tool result:", event.result);
   }
 });
 
-await runtime.prompt(
+await agent.prompt(
   "Use the word_count tool on the string: 'Count the words in this sentence.' and report the result."
 );
 

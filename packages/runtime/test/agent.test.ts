@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { MockLanguageModelV3 } from "ai/test";
 import { convertArrayToReadableStream } from "@ai-sdk/provider-utils/test";
-import { createAgentSession } from "../src/create-agent-session";
+import { Agent } from "../src/agent";
+import { InMemorySessionStore } from "../src/session-store";
 
 function createMockModel(responseText: string) {
   return new MockLanguageModelV3({
@@ -39,26 +40,43 @@ function createMockModel(responseText: string) {
   });
 }
 
-describe("createAgentSession", () => {
-  it("creates a session and records messages", async () => {
-    const entries: Array<{ id: string }> = [];
-    const store = {
-      async load() {
-        return { version: 1, entries: [] };
-      },
-      async append(entry: { id: string }) {
-        entries.push(entry);
-      },
-    };
-
-    const { session } = await createAgentSession({
+describe("Agent", () => {
+  it("auto-records messages when a session store is provided", async () => {
+    const store = new InMemorySessionStore();
+    const agent = new Agent({
       model: createMockModel("Hello"),
       sessionStore: store,
     });
 
-    await session.runtime.prompt("Hi");
+    await agent.prompt("Hi");
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(entries.length).toBeGreaterThanOrEqual(2);
+    const tree = await store.load();
+    expect(tree.entries.length).toBeGreaterThanOrEqual(2);
+    expect(tree.entries[1]?.parentId).toBe(tree.entries[0]?.id);
+  });
+
+  it("stops recording when stopRecording is called", async () => {
+    const store = new InMemorySessionStore();
+    const agent = new Agent({
+      model: createMockModel("Hello"),
+      sessionStore: store,
+    });
+
+    agent.stopRecording();
+    await agent.prompt("Hi");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const tree = await store.load();
+    expect(tree.entries.length).toBe(0);
+  });
+
+  it("loads an empty session tree when no store is configured", async () => {
+    const agent = new Agent({
+      model: createMockModel("Hello"),
+    });
+
+    const tree = await agent.loadSession();
+    expect(tree.entries.length).toBe(0);
   });
 });

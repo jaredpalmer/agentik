@@ -1,9 +1,9 @@
-import { AgentRuntime, type AgentMessage } from "@agentik/runtime";
+import { Agent, type AgentMessage } from "@agentik/runtime";
 import { createMockModel } from "./mock-model";
 
 // This example shows how to trim or enrich context before the model sees it.
 // Here we keep only the last 2 messages and inject a system instruction.
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model: createMockModel("Context transformed."),
   transformContext: async (messages) => {
     const trimmed = messages.slice(-2);
@@ -15,11 +15,11 @@ const runtime = new AgentRuntime({
   },
 });
 
-await runtime.prompt("Hello");
-await runtime.prompt("Follow up question.");
+await agent.prompt("Hello");
+await agent.prompt("Follow up question.");
 
-// The runtime state reflects the transformed context.
+// The agent state reflects the transformed context.
 console.log(
   "Context roles:",
-  runtime.state.messages.map((message) => message.role)
+  agent.state.messages.map((message) => message.role)
 );

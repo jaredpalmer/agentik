@@ -1,18 +1,18 @@
-import { createAgentSession } from "@agentik/sdk";
+import { Agent } from "@agentik/runtime";
 import { createMockModel } from "./mock-model";
 
-// This example passes instructions (system prompt) into the session runtime
+// This example passes instructions (system prompt) into the agent runtime
 // and shows how to subscribe to events.
-const { session } = await createAgentSession({
+const agent = new Agent({
   model: createMockModel("Following the system prompt."),
   instructions: "Be terse and output one sentence.",
 });
 
-session.runtime.subscribe((event) => {
+agent.subscribe((event) => {
   if (event.type === "message_update") {
     process.stdout.write(event.delta);
   }
 });
 
-await session.runtime.prompt("Explain what Agentik is.");
+await agent.prompt("Explain what Agentik is.");
 console.log("\nDone.");

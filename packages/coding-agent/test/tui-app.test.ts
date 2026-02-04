@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { TuiApp } from "../src/tui/tui-app";
 
-type RuntimeStub = { subscribe: () => () => void };
+type AgentStub = { subscribe: () => () => void };
 type TestableApp = TuiApp & {
   handleEvent: (event: unknown) => void;
   messages: Array<{ role: string; content: string }>;
 };
 
 function createApp() {
-  const runtime = { subscribe: () => () => {} } as RuntimeStub;
-  const app = new TuiApp({ runtime: runtime as never });
+  const agent = { subscribe: () => () => {} } as AgentStub;
+  const app = new TuiApp({ agent: agent as never });
   return app;
 }
 

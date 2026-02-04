@@ -11,7 +11,7 @@ import {
   type TextChunk,
   type CliRenderer,
 } from "@opentui/core";
-import type { AgentEvent, AgentMessage, AgentRuntime } from "@agentik/runtime";
+import type { Agent, AgentEvent, AgentMessage } from "@agentik/runtime";
 import { Box, InputField, Loader, MarkdownBlock, TextBlock, TruncatedText } from "./components";
 
 type DisplayMessage = {
@@ -30,11 +30,11 @@ type MessageEntry = DisplayMessage & {
 };
 
 export type TuiAppOptions = {
-  runtime: AgentRuntime;
+  agent: Agent;
 };
 
 export class TuiApp {
-  private runtime: AgentRuntime;
+  private agent: Agent;
   private renderer?: CliRenderer;
   private root?: Box;
   private scrollBox?: ScrollBoxRenderable;
@@ -70,7 +70,7 @@ export class TuiApp {
   private static readonly queueHintText = "";
 
   constructor(options: TuiAppOptions) {
-    this.runtime = options.runtime;
+    this.agent = options.agent;
   }
 
   async start(): Promise<void> {
@@ -222,9 +222,9 @@ export class TuiApp {
         const dequeued = this.queuedMessages.pop();
         if (dequeued) {
           if (dequeued.mode === "steering") {
-            this.runtime.dequeueLastSteeringMessage();
+            this.agent.dequeueLastSteeringMessage();
           } else {
-            this.runtime.dequeueLastFollowUpMessage();
+            this.agent.dequeueLastFollowUpMessage();
           }
           this.input.value = dequeued.content;
           this.renderQueuedMessages();
@@ -242,7 +242,7 @@ export class TuiApp {
         this.renderer?.requestRender();
       }
     });
-    this.unsubscribe = this.runtime.subscribe((event) => this.handleEvent(event));
+    this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
   }
 
   stop(): void {
@@ -290,28 +290,26 @@ export class TuiApp {
     this.setStatus("Thinking...");
     this.abortController?.abort();
     this.abortController = new AbortController();
-    void this.runtime
-      .prompt(prompt, { abortSignal: this.abortController.signal })
-      .catch((error) => {
-        if (this.isAbortError(error)) {
-          return;
-        }
-        console.error("Prompt failed:", error);
-        this.isStreaming = false;
-        this.setStatus(`Error: ${this.formatError(error)}`);
-        this.render();
-      });
+    void this.agent.prompt(prompt, { abortSignal: this.abortController.signal }).catch((error) => {
+      if (this.isAbortError(error)) {
+        return;
+      }
+      console.error("Prompt failed:", error);
+      this.isStreaming = false;
+      this.setStatus(`Error: ${this.formatError(error)}`);
+      this.render();
+    });
   }
 
   private queueMessage(text: string, mode: "steering" | "follow-up"): void {
     if (mode === "steering") {
-      this.runtime.enqueueSteeringMessage(text);
+      this.agent.enqueueSteeringMessage(text);
     } else {
-      this.runtime.enqueueFollowUpMessage(text);
+      this.agent.enqueueFollowUpMessage(text);
     }
     this.queuedMessages.push({ mode, content: text });
     this.renderQueuedMessages();
-    const counts = this.runtime.getQueueCounts();
+    const counts = this.agent.getQueueCounts();
     this.setStatus(
       `Queued ${mode} message. Steering: ${counts.steering}, Follow-up: ${counts.followUp}`
     );

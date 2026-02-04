@@ -2,7 +2,7 @@
 
 ## Goals
 
-- Build a pi-like agent system on top of AI SDK v6, preserving a strict split between agent and SDK, with UI housed inside the CLI package.
+- Build a pi-like agent system on top of AI SDK v6 with a single runtime package (loop + optional session recording) and UI housed inside the CLI package.
 - Use Bun workspaces.
 - Wrap OpenTUI for the terminal UI layer.
 - Support subagents with shared memory and delegation, but keep it optional/feature-flagged.
@@ -14,11 +14,6 @@
   - Tool registry, tool execution policies, and streaming event bus.
   - Session tree format (pi-style JSONL) and compaction hooks.
   - Subagent manager (optional) with shared-memory access rules.
-
-- `packages/sdk`
-  - `createAgentSession` and embedding API (pi-style `sdk.ts`).
-  - Loads settings/auth, resources (skills/prompts/extensions), and session state.
-  - Model resolution and fallback behavior.
 
 - `packages/coding-agent`
   - CLI with modes: interactive (TUI), print/JSON, and RPC.
@@ -40,9 +35,9 @@
 - Add tool registry + execution policies + event emission.
 - Add compaction hooks and context transformers.
 
-### Phase 2: SDK
+### Phase 2: Sessions + Policy (Runtime)
 
-- Implement `createAgentSession` entrypoint.
+- Implement `Agent` wrapper with session recording (`SessionStore`).
 - Resource loading (skills/prompts/extensions), settings/auth.
 - Session restore and model fallback logic.
 
@@ -71,7 +66,7 @@
 - Quick start and configuration.
 - Tooling, extensions, skills.
 - Subagent usage patterns.
-- SDK embedding examples.
+- Agent embedding examples.
 
 ## Core Parity Gaps vs pi-mono (Focus Areas 1–4)
 

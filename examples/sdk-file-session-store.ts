@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { createAgentSession, type SessionStore } from "@agentik/sdk";
-import type { SessionEntry, SessionTree } from "@agentik/runtime";
+import { Agent, type SessionEntry, type SessionStore, type SessionTree } from "@agentik/runtime";
 import { createMockModel } from "./mock-model";
 
 // Simple file-backed SessionStore to persist a SessionTree as JSON.
@@ -28,12 +27,12 @@ class FileSessionStore implements SessionStore {
 const filePath = resolve(".agentik-example/session.json");
 const store = new FileSessionStore(filePath);
 
-const { session } = await createAgentSession({
+const agent = new Agent({
   model: createMockModel("Persisted to disk."),
   sessionStore: store,
 });
 
-await session.runtime.prompt("Write this to the file-backed store.");
+await agent.prompt("Write this to the file-backed store.");
 await new Promise((resolve) => setTimeout(resolve, 0));
 
 const tree = await store.load();

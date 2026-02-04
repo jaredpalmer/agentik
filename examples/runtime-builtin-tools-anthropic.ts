@@ -1,5 +1,5 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { AgentRuntime, createListTool, createReadTool } from "@agentik/runtime";
+import { Agent, createListTool, createReadTool } from "@agentik/runtime";
 
 // Example using built-in file tools with a real model.
 // Requires environment variables:
@@ -15,12 +15,12 @@ if (!modelId || !process.env.ANTHROPIC_API_KEY) {
 }
 
 const cwd = process.cwd();
-const runtime = new AgentRuntime({
+const agent = new Agent({
   model: anthropic(modelId),
   tools: [createListTool(cwd), createReadTool(cwd)],
 });
 
-runtime.subscribe((event) => {
+agent.subscribe((event) => {
   if (event.type === "tool_execution_start") {
     console.log(`[tool:start] ${event.toolName}`);
   }
@@ -32,7 +32,7 @@ runtime.subscribe((event) => {
   }
 });
 
-await runtime.prompt(
+await agent.prompt(
   "List the top-level files and read README.md. Then summarize what this repo is about."
 );
 
