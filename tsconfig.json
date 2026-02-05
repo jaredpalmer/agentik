@@ -9,6 +9,14 @@
     "declaration": true,
     "composite": true
   },
-  "references": [{ "path": "packages/agent" }, { "path": "packages/coding-agent" }],
-  "files": []
+  "references": [
+    {
+      "path": "packages/agent"
+    },
+    {
+      "path": "packages/coding-agent"
+    }
+  ],
+  "files": [],
+  "exclude": ["opensrc"]
 }
