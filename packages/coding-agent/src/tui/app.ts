@@ -105,26 +105,36 @@ function truncate(s: string, max: number): string {
   return oneLine.length > max ? oneLine.slice(0, max - 1) + "\u2026" : oneLine;
 }
 
-function summarizeToolResult(toolName: string, result: unknown, isError: boolean): string {
-  if (isError) {
-    const msg = typeof result === "string" ? result : JSON.stringify(result);
-    return truncate(msg, 80);
-  }
+interface ToolResult {
+  content?: Array<{ type: string; text?: string }>;
+  details?: Record<string, unknown>;
+}
 
-  if (typeof result === "string") {
-    const lines = result.split("\n");
-    if (lines.length <= 3) return truncate(result, 120);
+function getToolResultText(result: unknown): string {
+  if (!result || typeof result !== "object") return "";
+  const r = result as ToolResult;
+  if (!r.content) return "";
+  return r.content
+    .filter((c) => c.type === "text" && c.text)
+    .map((c) => c.text!)
+    .join("\n");
+}
+
+function getToolDiff(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const r = result as ToolResult;
+  if (r.details && typeof r.details.diff === "string") return r.details.diff;
+  return null;
+}
+
+function summarizeToolResult(result: unknown, isError: boolean): string {
+  const text = getToolResultText(result);
+  if (isError && text) return truncate(text, 80);
+  if (text) {
+    const lines = text.split("\n");
+    if (lines.length <= 3) return truncate(text, 120);
     return `${lines.length} lines`;
   }
-
-  if (result && typeof result === "object") {
-    const r = result as Record<string, unknown>;
-    // Edit tool returns { diff, firstChangedLine }
-    if (typeof r.diff === "string") return truncate(r.diff, 120);
-    // Glob/grep return arrays
-    if (Array.isArray(r)) return `${r.length} results`;
-  }
-
   return "";
 }
 
@@ -385,24 +395,52 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     const timeStr = elapsed > 500 ? ` ${(elapsed / 1000).toFixed(1)}s` : "";
     this.pendingTools.delete(toolCallId);
 
-    // Update the pending tool block in-place if available
+    const icon = isError ? "\u2717" : "\u2713";
+    const statusColor = isError ? colors.errorFg : colors.successFg;
+    const resultSummary = summarizeToolResult(result, isError);
+    const resultText = resultSummary ? ` ${resultSummary}` : "";
+
+    // Update the pending tool block in-place
     if (pending?.block.text) {
-      const icon = isError ? "\u2717" : "\u2713";
-      const color = isError ? colors.errorFg : colors.successFg;
-      const resultSummary = summarizeToolResult(toolName, result, isError);
-      const resultText = resultSummary ? ` ${resultSummary}` : "";
-
-      pending.block.text.content = t`${fg(color)(dim(`  ${icon} ${toolName}${timeStr}`))}${dim(resultText)}`;
-      return;
+      pending.block.text.content = t`${fg(statusColor)(dim(`  ${icon} ${toolName}${timeStr}`))}${dim(resultText)}`;
+    } else {
+      const block = this.addMessageBlock("status");
+      if (block.text) {
+        block.text.content = t`${fg(statusColor)(dim(`  ${icon} ${toolName}${timeStr}`))}`;
+      }
     }
 
-    // Fallback: add new status block
-    const block = this.addMessageBlock("status");
-    if (block.text) {
-      const icon = isError ? "\u2717" : "\u2713";
-      const color = isError ? colors.errorFg : colors.successFg;
-      block.text.content = t`${fg(color)(dim(`  ${icon} ${toolName}${timeStr}`))}`;
+    // Show diff for edit tool results
+    if (!isError && toolName === "edit") {
+      const diff = getToolDiff(result);
+      if (diff) {
+        this.addDiffBlock(diff);
+      }
     }
+  }
+
+  private addDiffBlock(diff: string): void {
+    const r = this.renderer;
+    const container = new BoxRenderable(r, {
+      width: "100%",
+      flexDirection: "column",
+      paddingLeft: 2,
+    });
+
+    for (const line of diff.split("\n")) {
+      let content: StyledText;
+      if (line.startsWith("+")) {
+        content = t`${fg(colors.diffAdded)(line)}`;
+      } else if (line.startsWith("-")) {
+        content = t`${fg(colors.diffRemoved)(line)}`;
+      } else {
+        content = t`${fg(colors.diffContext)(line)}`;
+      }
+      container.add(new TextRenderable(r, { width: "100%", content }));
+    }
+
+    this.messages.push({ type: "status", container });
+    this.chatScroll.add(container);
   }
 
   private onTurnEnd(message: AgentMessage): void {
@@ -499,6 +537,7 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
       case "/exit":
         this.destroy();
         process.exit(0);
+        return true; // unreachable, prevents fall-through if exit is stubbed
 
       case "/clear":
         this.agent.clearMessages();
@@ -515,7 +554,7 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
         return true;
 
       case "/thinking": {
-        if (arg && THINKING_LEVELS.includes(arg as ThinkingLevel)) {
+        if (arg && (THINKING_LEVELS as readonly string[]).includes(arg)) {
           this.agent.setThinkingLevel(arg as ThinkingLevel);
           this.updateInputBorderColor();
           this.header.content = this.buildHeaderContent();
@@ -706,6 +745,7 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
       this.chatScroll.remove(msg.container.id);
     }
     this.messages = [];
+    this.pendingTools.clear();
     this.totalTokensIn = 0;
     this.totalTokensOut = 0;
     this.totalCacheRead = 0;
