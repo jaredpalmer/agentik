@@ -3,22 +3,24 @@ module: [Module name or "System" for system-wide]
 date: [YYYY-MM-DD]
 problem_type:
   [
-    build_error|test_failure|runtime_error|performance_issue|database_issue|security_issue|ui_bug|integration_issue|logic_error,
+    build_error|test_failure|runtime_error|type_error|streaming_issue|tool_execution_issue|ai_sdk_integration|performance_issue|config_error|dependency_issue|logic_error|developer_experience|documentation_gap,
   ]
 component:
   [
-    rails_model|rails_controller|rails_view|service_object|background_job|database|frontend_stimulus|hotwire_turbo|email_processing|brief_system|assistant|authentication|payments,
+    agent_loop|agent_class|event_stream|type_system|message_conversion|tool_bash|tool_edit|tool_grep|tool_file_io|ai_sdk_stream|provider_config|zod_schemas|cli_tui|build_tooling|testing,
   ]
 symptoms:
   - [Observable symptom 1 - specific error message or behavior]
   - [Observable symptom 2 - what user actually saw/experienced]
 root_cause:
   [
-    missing_association|missing_include|missing_index|wrong_api|scope_issue|thread_violation|async_timing|memory_leak|config_error|logic_error|test_isolation|missing_validation|missing_permission,
+    type_mismatch|missing_type_assertion|declaration_merge_error|zod_schema_error|ai_sdk_api_change|stream_event_ordering|async_timing|abort_signal_handling|subprocess_error|config_error|logic_error|message_format_error|missing_null_check|encoding_issue|workspace_resolution|dependency_version_mismatch,
   ]
-rails_version: [7.1.2 - optional]
-resolution_type: [code_fix|migration|config_change|test_fix|dependency_update|environment_setup]
+resolution_type: [code_fix|type_fix|config_change|test_fix|dependency_update|schema_fix|environment_setup|documentation_update|tooling_addition]
 severity: [critical|high|medium|low]
+ai_sdk_version: [6.0.72 - optional]
+bun_version: [1.2.4 - optional]
+package: ["@agentik/agent" - optional]
 tags: [keyword1, keyword2, keyword3]
 ---
 
@@ -31,8 +33,11 @@ tags: [keyword1, keyword2, keyword3]
 ## Environment
 
 - Module: [Name or "System-wide"]
-- Rails Version: [e.g., 7.1.2]
-- Affected Component: [e.g., "Email Processing model", "Brief System service", "Authentication controller"]
+- Package: [e.g., "@agentik/agent", "@agentik/coding-agent"]
+- Bun Version: [e.g., 1.2.4]
+- AI SDK Version: [e.g., 6.0.72]
+- TypeScript Version: [e.g., 5.7.3]
+- Affected Component: [e.g., "Agent Loop streamText call", "Edit tool fuzzy matching", "Event stream emission"]
 - Date: [YYYY-MM-DD when this was solved]
 
 ## Symptoms
@@ -62,19 +67,12 @@ tags: [keyword1, keyword2, keyword3]
 
 **Code changes** (if applicable):
 
-```ruby
-# Before (broken):
+```typescript
+// Before (broken):
 [Show the problematic code]
 
-# After (fixed):
+// After (fixed):
 [Show the corrected code with explanation]
-```
-
-**Database migration** (if applicable):
-
-```ruby
-# Migration change:
-[Show what was changed in the migration]
 ```
 
 **Commands run** (if applicable):
@@ -90,7 +88,7 @@ tags: [keyword1, keyword2, keyword3]
 
 1. What was the ROOT CAUSE of the problem?
 2. Why does the solution address this root cause?
-3. What was the underlying issue (API misuse, configuration error, Rails version issue, etc.)?
+3. What was the underlying issue (type mismatch, API misuse, configuration error, etc.)?
 
 [Be detailed enough that future developers understand the "why", not just the "what"]
 
