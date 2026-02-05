@@ -7,6 +7,9 @@
 import { Agent, type AgentEvent } from "@agentik/agent";
 import { createInterface } from "node:readline";
 import { codingTools } from "./tools/index.js";
+import { bashGuard } from "./extensions/bash-guard.js";
+import { toolLogger } from "./extensions/tool-logger.js";
+import { contextInfo } from "./extensions/context-info.js";
 
 // ============================================================================
 // Model Setup
@@ -97,6 +100,11 @@ Current working directory: ${process.cwd()}`,
       tools: codingTools,
     },
   });
+
+  // Register extensions
+  agent.use(bashGuard());
+  agent.use(toolLogger());
+  agent.use(contextInfo({ cwd: process.cwd() }));
 
   // Subscribe to events for streaming output
   agent.subscribe(formatEvent);

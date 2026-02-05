@@ -210,6 +210,42 @@ export type AgentEvent =
     };
 
 // ============================================================================
+// Extension Types
+// ============================================================================
+
+export type TransformContextHook = (
+  messages: AgentMessage[],
+  signal?: AbortSignal
+) => Promise<AgentMessage[]>;
+
+export type BeforeToolCallHook = (
+  toolCall: ToolCall,
+  tool: AgentTool
+) => Promise<
+  | { action: "continue"; toolCall?: ToolCall }
+  | { action: "block"; result: AgentToolResult<unknown> }
+>;
+
+export type AfterToolResultHook = (
+  toolCall: ToolCall,
+  result: ToolResultMessage
+) => Promise<ToolResultMessage>;
+
+export interface ExtensionAPI {
+  readonly state: AgentState;
+  registerTool(tool: AgentTool): () => void;
+  unregisterTool(name: string): boolean;
+  on(event: "transformContext", hook: TransformContextHook): () => void;
+  on(event: "beforeToolCall", hook: BeforeToolCallHook): () => void;
+  on(event: "afterToolResult", hook: AfterToolResultHook): () => void;
+  on(event: "event", listener: (e: AgentEvent) => void): () => void;
+  steer(message: AgentMessage): void;
+  followUp(message: AgentMessage): void;
+}
+
+export type Extension = (api: ExtensionAPI) => void | (() => void);
+
+// ============================================================================
 // Agent Loop Config
 // ============================================================================
 
@@ -257,6 +293,12 @@ export interface AgentLoopConfig {
 
   /** Provider-specific options passed through to AI SDK */
   providerOptions?: Record<string, unknown>;
+
+  /** Hook called before each tool execution. Can block or modify tool calls. */
+  beforeToolCall?: BeforeToolCallHook;
+
+  /** Hook called after each tool execution. Can modify the result. */
+  afterToolResult?: AfterToolResultHook;
 }
 
 // ============================================================================

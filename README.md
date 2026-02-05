@@ -13,8 +13,8 @@ agentik/
 
 Agentik is a Bun monorepo with two packages:
 
-- **`@agentik/agent`** is the core library. It provides the agent loop, streaming event system, message types, and stateful `Agent` class. It depends only on `ai` (AI SDK 6) and `zod`.
-- **`@agentik/coding-agent`** is a concrete agent with 7 coding tools (bash, read, write, edit, glob, grep, ls) and a minimal terminal UI for interactive testing.
+- **`@agentik/agent`** is the core library. It provides the agent loop, streaming event system, message types, extension system, and stateful `Agent` class. It depends only on `ai` (AI SDK 6) and `zod`.
+- **`@agentik/coding-agent`** is a concrete agent with 7 coding tools (bash, read, write, edit, glob, grep, ls), 3 built-in extensions (bash-guard, tool-logger, context-info), and a minimal terminal UI for interactive testing.
 
 ## Quick Start
 
@@ -47,7 +47,7 @@ AGENTIK_PROVIDER=openai OPENAI_API_KEY=sk-... AGENTIK_MODEL=gpt-4o bun run packa
 bun test
 ```
 
-This builds the project and runs all 53 tests across both packages.
+This builds the project and runs all 78 tests across both packages.
 
 ---
 
@@ -63,6 +63,7 @@ The core library implements a streaming agent loop that:
 4. Executes tool calls and feeds results back to the LLM
 5. Repeats until the LLM stops producing tool calls
 6. Supports mid-run steering (interrupt) and post-completion follow-up messages
+7. Provides an extension system for chainable hooks, runtime tool registration, and tool call interception
 
 ### The Agent Loop
 
@@ -400,6 +401,81 @@ for await (const event of stream) {
 const result = await stream.result(); // "complete"
 ```
 
+### Extension System
+
+Extensions add capabilities to an agent via chainable hooks, runtime tool registration, and event observation. An extension is a function that receives an `ExtensionAPI` and optionally returns a cleanup function:
+
+```typescript
+import type { Extension } from "@agentik/agent";
+
+const myExtension: Extension = (api) => {
+  // Register hooks, tools, event listeners
+  api.on("beforeToolCall", async (toolCall, tool) => {
+    console.log(`About to call ${toolCall.name}`);
+    return { action: "continue" };
+  });
+
+  // Optional: return cleanup function
+  return () => {
+    console.log("Extension removed");
+  };
+};
+
+// Register with agent — returns a dispose function
+const dispose = agent.use(myExtension);
+
+// Later, remove all hooks/tools registered by this extension
+dispose();
+```
+
+#### ExtensionAPI
+
+| Method                         | Description                                            |
+| ------------------------------ | ------------------------------------------------------ |
+| `state`                        | Read-only access to `AgentState`                       |
+| `registerTool(tool)`           | Add a tool at runtime. Returns unregister function.    |
+| `unregisterTool(name)`         | Remove a tool by name. Returns `true` if found.        |
+| `on("transformContext", hook)` | Modify messages before LLM calls                       |
+| `on("beforeToolCall", hook)`   | Intercept tool calls — block or modify args            |
+| `on("afterToolResult", hook)`  | Modify tool results before they enter the conversation |
+| `on("event", listener)`        | Subscribe to all agent events                          |
+| `steer(message)`               | Queue a steering message                               |
+| `followUp(message)`            | Queue a follow-up message                              |
+
+#### Hook Types
+
+**TransformContextHook** — Runs before each LLM call. Multiple hooks chain sequentially (each receives the output of the previous). The base `transformContext` from `AgentOptions` runs first.
+
+```typescript
+api.on("transformContext", async (messages, signal) => {
+  // Inject context, prune old messages, etc.
+  return [systemInfoMessage, ...messages];
+});
+```
+
+**BeforeToolCallHook** — Runs before each tool execution. Can block (with a custom result) or modify the tool call. Multiple hooks chain — first "block" wins.
+
+```typescript
+api.on("beforeToolCall", async (toolCall, tool) => {
+  if (isDangerous(toolCall)) {
+    return {
+      action: "block",
+      result: { content: [{ type: "text", text: "Blocked!" }], details: {} },
+    };
+  }
+  // Optionally modify args
+  return { action: "continue", toolCall: { ...toolCall, arguments: sanitized } };
+});
+```
+
+**AfterToolResultHook** — Runs after each tool execution. Can modify the result message. Multiple hooks chain sequentially.
+
+```typescript
+api.on("afterToolResult", async (toolCall, result) => {
+  return { ...result, content: [{ type: "text", text: redact(result) }] };
+});
+```
+
 ### AI SDK Integration
 
 Agentik uses AI SDK 6 under the hood. Key integration points:
@@ -572,6 +648,53 @@ Environment variables:
 - `AGENTIK_MODEL` - Model ID (default: `claude-sonnet-4-20250514`)
 - `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` - API credentials
 
+### Extensions
+
+The coding agent ships with 3 built-in extensions (all enabled by default in the TUI):
+
+#### `bashGuard` — Command Safety
+
+Blocks dangerous bash commands before they execute:
+
+- `rm -rf /`, `rm -rf ~`, `rm -rf *`
+- `git push --force` to main/master
+- Fork bombs (`:(){ :|:& };:`)
+
+```typescript
+import { bashGuard } from "@agentik/coding-agent";
+agent.use(bashGuard());
+```
+
+#### `toolLogger` — Execution Logging
+
+Logs tool start/end events with duration tracking:
+
+```typescript
+import { toolLogger } from "@agentik/coding-agent";
+
+// Default: logs to console
+agent.use(toolLogger());
+
+// Custom callback
+agent.use(
+  toolLogger({
+    onLog: (entry) => {
+      // entry: { type, toolName, toolCallId, args?, isError?, durationMs? }
+      myLogger.info(entry);
+    },
+  })
+);
+```
+
+#### `contextInfo` — Dynamic Context Injection
+
+Injects working directory, git branch, and timestamp into the LLM context before each call:
+
+```typescript
+import { contextInfo } from "@agentik/coding-agent";
+agent.use(contextInfo({ cwd: process.cwd() }));
+```
+
 ---
 
 ## Development
@@ -614,6 +737,7 @@ packages/
       agent.test.ts
       agent-loop.test.ts
       event-stream.test.ts
+      extension.test.ts   # Extension system tests
       utils/
         mock-model.ts   # Mock AI SDK LanguageModel for tests
         echo-tool.ts    # Simple echo tool for tests
@@ -629,9 +753,15 @@ packages/
         grep.ts         # ripgrep-powered content search
         ls.ts           # Directory listing
         index.ts        # Tool exports + codingTools array
+      extensions/
+        bash-guard.ts   # Blocks dangerous bash commands
+        tool-logger.ts  # Logs tool execution with timing
+        context-info.ts # Injects cwd, git branch, timestamp
+        index.ts        # Extension exports
       index.ts          # Package public API
     test/
       tools.test.ts     # 27 tests for all coding tools
+      extensions.test.ts # Extension integration tests
 ```
 
 ### Testing

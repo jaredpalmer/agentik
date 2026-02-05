@@ -168,7 +168,9 @@ async function runLoop(
           message,
           signal,
           stream,
-          config.getSteeringMessages
+          config.getSteeringMessages,
+          config.beforeToolCall,
+          config.afterToolResult
         );
         toolResults.push(...toolExecution.toolResults);
         steeringAfterTools = toolExecution.steeringMessages ?? null;
@@ -733,14 +735,16 @@ async function executeToolCalls(
   assistantMessage: AssistantMessage,
   signal: AbortSignal | undefined,
   stream: EventStream<AgentEvent, AgentMessage[]>,
-  getSteeringMessages?: AgentLoopConfig["getSteeringMessages"]
+  getSteeringMessages?: AgentLoopConfig["getSteeringMessages"],
+  beforeToolCall?: AgentLoopConfig["beforeToolCall"],
+  afterToolResult?: AgentLoopConfig["afterToolResult"]
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
   const toolCalls = assistantMessage.content.filter((c): c is ToolCall => c.type === "toolCall");
   const results: ToolResultMessage[] = [];
   let steeringMessages: AgentMessage[] | undefined;
 
   for (let index = 0; index < toolCalls.length; index++) {
-    const toolCall = toolCalls[index];
+    let toolCall = toolCalls[index];
     const tool = tools?.find((t) => t.name === toolCall.name);
 
     stream.push({
@@ -750,21 +754,33 @@ async function executeToolCalls(
       args: toolCall.arguments,
     });
 
-    let result: AgentToolResult<unknown>;
+    let result: AgentToolResult<unknown> | undefined;
     let isError = false;
 
     try {
       if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
 
-      result = await tool.execute(toolCall.id, toolCall.arguments, signal, (partialResult) => {
-        stream.push({
-          type: "tool_execution_update",
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          args: toolCall.arguments,
-          partialResult,
+      // Call beforeToolCall hook
+      if (beforeToolCall) {
+        const hookResult = await beforeToolCall(toolCall, tool);
+        if (hookResult.action === "block") {
+          result = hookResult.result;
+        } else if (hookResult.toolCall) {
+          toolCall = hookResult.toolCall;
+        }
+      }
+
+      if (!result) {
+        result = await tool.execute(toolCall.id, toolCall.arguments, signal, (partialResult) => {
+          stream.push({
+            type: "tool_execution_update",
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            args: toolCall.arguments,
+            partialResult,
+          });
         });
-      });
+      }
     } catch (e) {
       result = {
         content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
@@ -773,23 +789,31 @@ async function executeToolCalls(
       isError = true;
     }
 
+    // result is always assigned at this point (either by hook, execute, or catch)
+    const finalResult = result;
+
     stream.push({
       type: "tool_execution_end",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
-      result,
+      result: finalResult,
       isError,
     });
 
-    const toolResultMessage: ToolResultMessage = {
+    let toolResultMessage: ToolResultMessage = {
       role: "toolResult",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
-      content: result.content,
-      details: result.details,
+      content: finalResult.content,
+      details: finalResult.details,
       isError,
       timestamp: Date.now(),
     };
+
+    // Call afterToolResult hook
+    if (afterToolResult) {
+      toolResultMessage = await afterToolResult(toolCall, toolResultMessage);
+    }
 
     results.push(toolResultMessage);
     stream.push({ type: "message_start", message: toolResultMessage });

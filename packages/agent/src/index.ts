@@ -2,16 +2,21 @@ export { Agent, type AgentOptions } from "./agent.js";
 export { agentLoop, agentLoopContinue } from "./agent-loop.js";
 export { EventStream } from "./event-stream.js";
 export type {
+  AfterToolResultHook,
   AgentContext,
   AgentEvent,
   AgentLoopConfig,
   AgentMessage,
+  AgentState,
   AgentTool,
   AgentToolResult,
   AgentToolUpdateCallback,
   AssistantMessage,
   AssistantMessageEvent,
+  BeforeToolCallHook,
   CustomAgentMessages,
+  Extension,
+  ExtensionAPI,
   ImageContent,
   Message,
   StopReason,
@@ -21,7 +26,7 @@ export type {
   ThinkingLevel,
   ToolCall,
   ToolResultMessage,
+  TransformContextHook,
   Usage,
   UserMessage,
-  AgentState,
 } from "./types.js";

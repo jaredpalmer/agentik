@@ -6,17 +6,24 @@
 import type { LanguageModel } from "ai";
 import { agentLoop, agentLoopContinue } from "./agent-loop.js";
 import type {
+  AfterToolResultHook,
   AgentContext,
   AgentEvent,
   AgentLoopConfig,
   AgentMessage,
   AgentState,
   AgentTool,
+  BeforeToolCallHook,
+  Extension,
+  ExtensionAPI,
   ImageContent,
   Message,
   TextContent,
   ThinkingBudgets,
   ThinkingLevel,
+  ToolCall,
+  ToolResultMessage,
+  TransformContextHook,
 } from "./types.js";
 
 /**
@@ -85,6 +92,12 @@ export class Agent {
   private _temperature?: number;
   private _providerOptions?: Record<string, unknown>;
   private _thinkingBudgets?: ThinkingBudgets;
+
+  // Extension hook storage
+  private transformContextHooks: TransformContextHook[] = [];
+  private beforeToolCallHooks: BeforeToolCallHook[] = [];
+  private afterToolResultHooks: AfterToolResultHook[] = [];
+  private extensionCleanups: Array<() => void> = [];
 
   constructor(opts: AgentOptions = {}) {
     // We must have a model - if none provided, we'll create a placeholder that throws on use
@@ -218,6 +231,124 @@ export class Agent {
     this.followUpQueue = [];
   }
 
+  /**
+   * Register an extension. Returns a cleanup function that removes all hooks
+   * and tools registered by this extension.
+   */
+  use(extension: Extension): () => void {
+    // Track hooks registered by this extension for cleanup
+    const registeredTransformContext: TransformContextHook[] = [];
+    const registeredBeforeToolCall: BeforeToolCallHook[] = [];
+    const registeredAfterToolResult: AfterToolResultHook[] = [];
+    const registeredEventListeners: Array<(e: AgentEvent) => void> = [];
+    const registeredToolNames: string[] = [];
+
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
+
+    const api = {
+      get state() {
+        return self._state;
+      },
+
+      registerTool: (tool: AgentTool): (() => void) => {
+        this._state.tools = [...this._state.tools, tool];
+        registeredToolNames.push(tool.name);
+        return () => this.unregisterTool(tool.name);
+      },
+
+      unregisterTool: (name: string): boolean => {
+        return this.unregisterTool(name);
+      },
+
+      on: ((event: string, hook: unknown): (() => void) => {
+        switch (event) {
+          case "transformContext": {
+            const h = hook as TransformContextHook;
+            this.transformContextHooks.push(h);
+            registeredTransformContext.push(h);
+            return () => {
+              this.transformContextHooks = this.transformContextHooks.filter((x) => x !== h);
+            };
+          }
+          case "beforeToolCall": {
+            const h = hook as BeforeToolCallHook;
+            this.beforeToolCallHooks.push(h);
+            registeredBeforeToolCall.push(h);
+            return () => {
+              this.beforeToolCallHooks = this.beforeToolCallHooks.filter((x) => x !== h);
+            };
+          }
+          case "afterToolResult": {
+            const h = hook as AfterToolResultHook;
+            this.afterToolResultHooks.push(h);
+            registeredAfterToolResult.push(h);
+            return () => {
+              this.afterToolResultHooks = this.afterToolResultHooks.filter((x) => x !== h);
+            };
+          }
+          case "event": {
+            const listener = hook as (e: AgentEvent) => void;
+            this.listeners.add(listener);
+            registeredEventListeners.push(listener);
+            return () => {
+              this.listeners.delete(listener);
+            };
+          }
+          default:
+            throw new Error(`Unknown event: ${event}`);
+        }
+      }) as ExtensionAPI["on"],
+
+      steer: (message: AgentMessage): void => {
+        this.steer(message);
+      },
+
+      followUp: (message: AgentMessage): void => {
+        this.followUp(message);
+      },
+    } as ExtensionAPI;
+
+    const cleanup = extension(api);
+
+    const dispose = () => {
+      // Remove all hooks registered by this extension
+      for (const h of registeredTransformContext) {
+        this.transformContextHooks = this.transformContextHooks.filter((x) => x !== h);
+      }
+      for (const h of registeredBeforeToolCall) {
+        this.beforeToolCallHooks = this.beforeToolCallHooks.filter((x) => x !== h);
+      }
+      for (const h of registeredAfterToolResult) {
+        this.afterToolResultHooks = this.afterToolResultHooks.filter((x) => x !== h);
+      }
+      for (const listener of registeredEventListeners) {
+        this.listeners.delete(listener);
+      }
+      for (const name of registeredToolNames) {
+        this.unregisterTool(name);
+      }
+      // Call extension's own cleanup if provided
+      cleanup?.();
+      // Remove this dispose from the list
+      this.extensionCleanups = this.extensionCleanups.filter((c) => c !== dispose);
+    };
+
+    this.extensionCleanups.push(dispose);
+    return dispose;
+  }
+
+  registerTool(tool: AgentTool): () => void {
+    this._state.tools = [...this._state.tools, tool];
+    return () => this.unregisterTool(tool.name);
+  }
+
+  unregisterTool(name: string): boolean {
+    const before = this._state.tools.length;
+    this._state.tools = this._state.tools.filter((t) => t.name !== name);
+    return this._state.tools.length < before;
+  }
+
   /** Send a prompt with an AgentMessage */
   async prompt(message: AgentMessage | AgentMessage[]): Promise<void>;
   async prompt(input: string, images?: ImageContent[]): Promise<void>;
@@ -295,6 +426,52 @@ export class Agent {
       tools: this._state.tools,
     };
 
+    // Build chained transformContext
+    let chainedTransformContext = this.transformContext;
+    if (this.transformContextHooks.length > 0) {
+      const baseTransform = this.transformContext;
+      const hooks = [...this.transformContextHooks];
+      chainedTransformContext = async (messages: AgentMessage[], signal?: AbortSignal) => {
+        let result = baseTransform ? await baseTransform(messages, signal) : messages;
+        for (const hook of hooks) {
+          result = await hook(result, signal);
+        }
+        return result;
+      };
+    }
+
+    // Build chained beforeToolCall
+    let chainedBeforeToolCall: BeforeToolCallHook | undefined;
+    if (this.beforeToolCallHooks.length > 0) {
+      const hooks = [...this.beforeToolCallHooks];
+      chainedBeforeToolCall = async (toolCall: ToolCall, tool: AgentTool) => {
+        let currentToolCall = toolCall;
+        for (const hook of hooks) {
+          const hookResult = await hook(currentToolCall, tool);
+          if (hookResult.action === "block") {
+            return hookResult;
+          }
+          if (hookResult.toolCall) {
+            currentToolCall = hookResult.toolCall;
+          }
+        }
+        return { action: "continue" as const, toolCall: currentToolCall };
+      };
+    }
+
+    // Build chained afterToolResult
+    let chainedAfterToolResult: AfterToolResultHook | undefined;
+    if (this.afterToolResultHooks.length > 0) {
+      const hooks = [...this.afterToolResultHooks];
+      chainedAfterToolResult = async (toolCall: ToolCall, result: ToolResultMessage) => {
+        let current = result;
+        for (const hook of hooks) {
+          current = await hook(toolCall, current);
+        }
+        return current;
+      };
+    }
+
     const config: AgentLoopConfig = {
       model,
       reasoning,
@@ -303,7 +480,9 @@ export class Agent {
       temperature: this._temperature,
       providerOptions: this._providerOptions,
       convertToLlm: this.convertToLlm,
-      transformContext: this.transformContext,
+      transformContext: chainedTransformContext,
+      beforeToolCall: chainedBeforeToolCall,
+      afterToolResult: chainedAfterToolResult,
       getSteeringMessages: async () => {
         if (this.steeringMode === "one-at-a-time") {
           if (this.steeringQueue.length > 0) {
