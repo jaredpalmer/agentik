@@ -11,6 +11,8 @@
 import {
   type CliRenderer,
   type KeyEvent,
+  type StyledText,
+  type TextareaAction,
   createCliRenderer,
   BoxRenderable,
   TextRenderable,
@@ -18,13 +20,11 @@ import {
   TextareaRenderable,
   MarkdownRenderable,
   SyntaxStyle,
-  type StyledText,
   t,
   bold,
   dim,
   fg,
 } from "@opentui/core";
-import type { TextareaAction } from "@opentui/core";
 import type { Agent, AgentEvent, AssistantMessage, AssistantMessageEvent } from "@agentik/agent";
 import { colors, createSyntaxStyle } from "./theme.js";
 
