@@ -29,6 +29,7 @@
     "@agentik/agent": "workspace:*",
     "@ai-sdk/anthropic": "3.0.37",
     "@ai-sdk/openai": "3.0.25",
+    "@opentui/core": "^0.1.77",
     "zod": "4.3.6"
   }
 }
