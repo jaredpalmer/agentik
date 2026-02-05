@@ -2,10 +2,10 @@
  * OpenTUI-based terminal interface for the agentik coding agent.
  *
  * Layout (vertical flex):
- *   Header  – banner with model info
+ *   Header  – banner with model info & keybindings
  *   Chat    – scrollable message area (sticky-bottom)
- *   Input   – multi-line textarea with border
- *   Footer  – token stats / status
+ *   Input   – multi-line textarea with border (color = thinking level)
+ *   Footer  – token stats / model / thinking level
  */
 
 import {
@@ -25,8 +25,14 @@ import {
   dim,
   fg,
 } from "@opentui/core";
-import type { Agent, AgentEvent, AgentMessage, AssistantMessageEvent } from "@agentik/agent";
-import { colors, createSyntaxStyle } from "./theme.js";
+import type {
+  Agent,
+  AgentEvent,
+  AgentMessage,
+  AssistantMessageEvent,
+  ThinkingLevel,
+} from "@agentik/agent";
+import { colors, createSyntaxStyle, getThinkingBorderColor } from "./theme.js";
 
 // ============================================================================
 // Types
@@ -44,6 +50,82 @@ interface MessageBlock {
   container: BoxRenderable;
   markdown?: MarkdownRenderable;
   text?: TextRenderable;
+}
+
+interface PendingTool {
+  block: MessageBlock;
+  toolName: string;
+  startTime: number;
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function summarizeToolArgs(toolName: string, args: unknown): string {
+  if (!args || typeof args !== "object") return "";
+  const a = args as Record<string, unknown>;
+
+  switch (toolName) {
+    case "bash":
+      return typeof a.command === "string" ? truncate(a.command, 60) : "";
+    case "read_file":
+      return typeof a.file_path === "string" ? a.file_path : "";
+    case "write_file":
+      return typeof a.file_path === "string" ? a.file_path : "";
+    case "edit": {
+      const path = typeof a.file_path === "string" ? a.file_path : "";
+      const old = typeof a.old_string === "string" ? truncate(a.old_string, 30) : "";
+      return old ? `${path} "${old}"` : path;
+    }
+    case "glob":
+      return typeof a.pattern === "string" ? a.pattern : "";
+    case "grep": {
+      const pattern = typeof a.pattern === "string" ? a.pattern : "";
+      const path = typeof a.path === "string" ? ` in ${a.path}` : "";
+      return `${pattern}${path}`;
+    }
+    case "ls":
+      return typeof a.path === "string" ? a.path : ".";
+    default:
+      return "";
+  }
+}
+
+function truncate(s: string, max: number): string {
+  const oneLine = s.replace(/\n/g, "\\n");
+  return oneLine.length > max ? oneLine.slice(0, max - 1) + "\u2026" : oneLine;
+}
+
+function summarizeToolResult(toolName: string, result: unknown, isError: boolean): string {
+  if (isError) {
+    const msg = typeof result === "string" ? result : JSON.stringify(result);
+    return truncate(msg, 80);
+  }
+
+  if (typeof result === "string") {
+    const lines = result.split("\n");
+    if (lines.length <= 3) return truncate(result, 120);
+    return `${lines.length} lines`;
+  }
+
+  if (result && typeof result === "object") {
+    const r = result as Record<string, unknown>;
+    // Edit tool returns { diff, firstChangedLine }
+    if (typeof r.diff === "string") return truncate(r.diff, 120);
+    // Glob/grep return arrays
+    if (Array.isArray(r)) return `${r.length} results`;
+  }
+
+  return "";
 }
 
 // ============================================================================
@@ -68,11 +150,15 @@ export class TuiApp {
 
   // State
   private messages: MessageBlock[] = [];
+  private pendingTools = new Map<string, PendingTool>();
   private currentAssistant: MessageBlock | null = null;
   private currentThinking: MessageBlock | null = null;
   private currentThinkingText = "";
+  private hideThinking = false;
   private totalTokensIn = 0;
   private totalTokensOut = 0;
+  private totalCacheRead = 0;
+  private totalCacheWrite = 0;
   private lastSigint = 0;
   private unsubscribe?: () => void;
 
@@ -105,8 +191,8 @@ export class TuiApp {
 
   private buildLayout(): void {
     const r = this.renderer;
+    const thinkingLevel = this.agent.state.thinkingLevel;
 
-    // Root container – full-screen vertical flex
     this.root = new BoxRenderable(r, {
       id: "root",
       width: "100%",
@@ -115,20 +201,15 @@ export class TuiApp {
       backgroundColor: colors.bg,
     });
 
-    // Header
     this.header = new TextRenderable(r, {
       id: "header",
       width: "100%",
       paddingLeft: 1,
       paddingRight: 1,
       paddingTop: 1,
-      content: t`${bold(fg(colors.cyan)("agentik"))} ${dim("coding agent")}
-${dim(`Model: ${this.provider}/${this.modelId}`)}
-${dim(`Tools: ${this.toolNames.join(", ")}`)}
-${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
+      content: this.buildHeaderContent(),
     });
 
-    // Chat area – scrollable, sticks to bottom
     this.chatScroll = new ScrollBoxRenderable(r, {
       id: "chat",
       width: "100%",
@@ -142,15 +223,14 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
       },
     });
 
-    // Input area
     this.inputBox = new BoxRenderable(r, {
       id: "input-box",
       width: "100%",
       height: 4,
       border: true,
       borderStyle: "rounded",
-      borderColor: colors.border,
-      focusedBorderColor: colors.focusBorder,
+      borderColor: getThinkingBorderColor(thinkingLevel),
+      focusedBorderColor: getThinkingBorderColor(thinkingLevel),
       paddingLeft: 1,
       paddingRight: 1,
     });
@@ -175,7 +255,6 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
 
     this.inputBox.add(this.textarea);
 
-    // Footer
     this.footer = new TextRenderable(r, {
       id: "footer",
       width: "100%",
@@ -184,7 +263,6 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
       content: t`${dim("Ready")}`,
     });
 
-    // Assemble
     this.root.add(this.header);
     this.root.add(this.chatScroll);
     this.root.add(this.inputBox);
@@ -192,6 +270,21 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     r.root.add(this.root);
 
     this.textarea.focus();
+  }
+
+  private buildHeaderContent(): StyledText {
+    const thinkingLevel = this.agent.state.thinkingLevel;
+    const thinkingStr = thinkingLevel !== "off" ? ` | thinking: ${thinkingLevel}` : "";
+    return t`${bold(fg(colors.cyan)("agentik"))} ${dim("coding agent")}
+${dim(`${this.provider}/${this.modelId}${thinkingStr}`)}
+${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking | /help commands")}`;
+  }
+
+  private updateInputBorderColor(): void {
+    const level = this.agent.state.thinkingLevel;
+    const color = getThinkingBorderColor(level);
+    this.inputBox.borderColor = color;
+    this.inputBox.focusedBorderColor = color;
   }
 
   // ==========================================================================
@@ -211,10 +304,10 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
           this.onMessageEnd(event.message);
           break;
         case "tool_execution_start":
-          this.onToolStart(event.toolName, event.args);
+          this.onToolStart(event.toolCallId, event.toolName, event.args);
           break;
         case "tool_execution_end":
-          this.onToolEnd(event.toolName, event.isError);
+          this.onToolEnd(event.toolCallId, event.toolName, event.result, event.isError);
           break;
         case "turn_end":
           this.onTurnEnd(event.message);
@@ -244,13 +337,15 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
         break;
 
       case "thinking_start":
-        this.currentThinking = this.addMessageBlock("thinking");
+        if (!this.hideThinking) {
+          this.currentThinking = this.addMessageBlock("thinking");
+        }
         this.currentThinkingText = "";
         break;
 
       case "thinking_delta":
+        this.currentThinkingText += ame.delta;
         if (this.currentThinking?.text) {
-          this.currentThinkingText += ame.delta;
           this.currentThinking.text.content = t`${dim(this.currentThinkingText)}`;
         }
         break;
@@ -261,7 +356,6 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
         break;
 
       case "toolcall_start":
-        // Tool calls will be shown via tool_execution_start/end
         break;
 
       case "done":
@@ -275,21 +369,39 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     this.currentThinking = null;
   }
 
-  private onToolStart(toolName: string, _args: unknown): void {
+  private onToolStart(toolCallId: string, toolName: string, args: unknown): void {
+    const summary = summarizeToolArgs(toolName, args);
+    const argText = summary ? ` ${summary}` : "";
     const block = this.addMessageBlock("tool");
     if (block.text) {
-      block.text.content = t`${fg(colors.toolLabel)(dim(`  ⚙ ${toolName}...`))}`;
+      block.text.content = t`${fg(colors.toolLabel)(dim(`  \u29D7 ${toolName}`))}${dim(argText)}`;
     }
+    this.pendingTools.set(toolCallId, { block, toolName, startTime: Date.now() });
   }
 
-  private onToolEnd(toolName: string, isError: boolean): void {
+  private onToolEnd(toolCallId: string, toolName: string, result: unknown, isError: boolean): void {
+    const pending = this.pendingTools.get(toolCallId);
+    const elapsed = pending ? Date.now() - pending.startTime : 0;
+    const timeStr = elapsed > 500 ? ` ${(elapsed / 1000).toFixed(1)}s` : "";
+    this.pendingTools.delete(toolCallId);
+
+    // Update the pending tool block in-place if available
+    if (pending?.block.text) {
+      const icon = isError ? "\u2717" : "\u2713";
+      const color = isError ? colors.errorFg : colors.successFg;
+      const resultSummary = summarizeToolResult(toolName, result, isError);
+      const resultText = resultSummary ? ` ${resultSummary}` : "";
+
+      pending.block.text.content = t`${fg(color)(dim(`  ${icon} ${toolName}${timeStr}`))}${dim(resultText)}`;
+      return;
+    }
+
+    // Fallback: add new status block
     const block = this.addMessageBlock("status");
     if (block.text) {
-      if (isError) {
-        block.text.content = t`${fg(colors.errorFg)(dim(`  ✗ ${toolName} failed`))}`;
-      } else {
-        block.text.content = t`${fg(colors.successFg)(dim(`  ✓ ${toolName}`))}`;
-      }
+      const icon = isError ? "\u2717" : "\u2713";
+      const color = isError ? colors.errorFg : colors.successFg;
+      block.text.content = t`${fg(color)(dim(`  ${icon} ${toolName}${timeStr}`))}`;
     }
   }
 
@@ -297,6 +409,8 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     if (message.role === "assistant") {
       this.totalTokensIn += message.usage.input;
       this.totalTokensOut += message.usage.output;
+      this.totalCacheRead += message.usage.cacheRead;
+      this.totalCacheWrite += message.usage.cacheWrite;
 
       if (message.stopReason === "aborted") {
         this.addStatusMessage(t`${dim("[interrupted]")}`);
@@ -320,34 +434,16 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
       if (!text) return;
 
       // Handle slash commands
-      if (text === "/quit" || text === "/exit") {
-        this.destroy();
-        process.exit(0);
+      if (text.startsWith("/")) {
+        if (this.handleSlashCommand(text)) {
+          this.textarea.initialValue = "";
+          return;
+        }
       }
 
-      if (text === "/clear") {
-        this.agent.clearMessages();
-        this.clearChat();
-        this.addStatusMessage(t`${dim("Conversation cleared.")}`);
-        this.textarea.initialValue = "";
-        this.textarea.focus();
-        return;
-      }
-
-      if (text === "/reset") {
-        this.agent.reset();
-        this.clearChat();
-        this.addStatusMessage(t`${dim("Agent reset.")}`);
-        this.textarea.initialValue = "";
-        this.textarea.focus();
-        return;
-      }
-
-      // Add user message to chat
       this.addUserMessage(text);
       this.textarea.initialValue = "";
 
-      // Send to agent
       this.agent.prompt(text).catch((err: unknown) => {
         const errMsg = err instanceof Error ? err.message : String(err);
         this.addErrorMessage(errMsg);
@@ -356,27 +452,154 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
       });
     };
 
-    // Ctrl+C handling
     this.renderer.keyInput.on("keypress", (key: KeyEvent) => {
+      // Ctrl+C: cancel/exit
       if (key.name === "c" && key.ctrl) {
-        const now = Date.now();
+        this.handleCtrlC();
+        return;
+      }
 
-        if (this.agent.state.isStreaming) {
-          this.agent.abort();
-          this.addStatusMessage(t`${dim("[cancelled]")}`);
-          this.lastSigint = now;
-          return;
-        }
-
-        if (now - this.lastSigint < 2000) {
-          this.destroy();
-          process.exit(0);
-        }
-
-        this.lastSigint = now;
-        this.addStatusMessage(t`${dim("Press Ctrl+C again to exit")}`);
+      // Ctrl+T: cycle thinking level
+      if (key.name === "t" && key.ctrl) {
+        this.cycleThinkingLevel();
+        return;
       }
     });
+  }
+
+  private handleCtrlC(): void {
+    const now = Date.now();
+
+    if (this.agent.state.isStreaming) {
+      this.agent.abort();
+      this.addStatusMessage(t`${dim("[cancelled]")}`);
+      this.lastSigint = now;
+      return;
+    }
+
+    if (now - this.lastSigint < 2000) {
+      this.destroy();
+      process.exit(0);
+    }
+
+    this.lastSigint = now;
+    this.addStatusMessage(t`${dim("Press Ctrl+C again to exit")}`);
+  }
+
+  // ==========================================================================
+  // Slash commands
+  // ==========================================================================
+
+  private handleSlashCommand(text: string): boolean {
+    const [cmd, ...rest] = text.split(/\s+/);
+    const arg = rest.join(" ");
+
+    switch (cmd) {
+      case "/quit":
+      case "/exit":
+        this.destroy();
+        process.exit(0);
+
+      case "/clear":
+        this.agent.clearMessages();
+        this.clearChat();
+        this.addStatusMessage(t`${dim("Conversation cleared.")}`);
+        this.textarea.focus();
+        return true;
+
+      case "/reset":
+        this.agent.reset();
+        this.clearChat();
+        this.addStatusMessage(t`${dim("Agent reset.")}`);
+        this.textarea.focus();
+        return true;
+
+      case "/thinking": {
+        if (arg && THINKING_LEVELS.includes(arg as ThinkingLevel)) {
+          this.agent.setThinkingLevel(arg as ThinkingLevel);
+          this.updateInputBorderColor();
+          this.header.content = this.buildHeaderContent();
+          this.addStatusMessage(t`${dim(`Thinking level: ${arg}`)}`);
+          this.updateFooter();
+        } else {
+          const current = this.agent.state.thinkingLevel;
+          this.addStatusMessage(
+            t`${dim(`Thinking: ${current}. Options: ${THINKING_LEVELS.join(", ")}`)}`
+          );
+        }
+        this.textarea.focus();
+        return true;
+      }
+
+      case "/toggleThinking":
+        this.hideThinking = !this.hideThinking;
+        this.addStatusMessage(
+          t`${dim(`Thinking blocks: ${this.hideThinking ? "hidden" : "visible"}`)}`
+        );
+        this.textarea.focus();
+        return true;
+
+      case "/help":
+        this.showHelp();
+        this.textarea.focus();
+        return true;
+
+      case "/session":
+        this.showSessionInfo();
+        this.textarea.focus();
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  private showHelp(): void {
+    const helpLines = [
+      "Commands:",
+      "  /help            Show this help",
+      "  /clear           Clear conversation",
+      "  /reset           Reset agent state",
+      "  /thinking [lvl]  Set thinking level (off/minimal/low/medium/high/xhigh)",
+      "  /toggleThinking  Hide/show thinking blocks",
+      "  /session         Show session info",
+      "  /quit /exit      Exit",
+      "",
+      "Keybindings:",
+      "  Enter            Send message",
+      "  Shift+Enter      New line",
+      "  Ctrl+C           Cancel stream / double to exit",
+      "  Ctrl+T           Cycle thinking level",
+    ];
+    this.addStatusMessage(t`${dim(helpLines.join("\n"))}`);
+  }
+
+  private showSessionInfo(): void {
+    const state = this.agent.state;
+    const lines = [
+      `Model: ${this.provider}/${this.modelId}`,
+      `Thinking: ${state.thinkingLevel}`,
+      `Messages: ${state.messages.length}`,
+      `Tokens: ${formatTokenCount(this.totalTokensIn)} in / ${formatTokenCount(this.totalTokensOut)} out`,
+      `Cache: ${formatTokenCount(this.totalCacheRead)} read / ${formatTokenCount(this.totalCacheWrite)} write`,
+      `Tools: ${this.toolNames.join(", ")}`,
+    ];
+    this.addStatusMessage(t`${dim(lines.join("\n"))}`);
+  }
+
+  // ==========================================================================
+  // Thinking level
+  // ==========================================================================
+
+  private cycleThinkingLevel(): void {
+    const current = this.agent.state.thinkingLevel;
+    const idx = THINKING_LEVELS.indexOf(current);
+    const next = THINKING_LEVELS[(idx + 1) % THINKING_LEVELS.length];
+    this.agent.setThinkingLevel(next);
+    this.updateInputBorderColor();
+    this.header.content = this.buildHeaderContent();
+    this.addStatusMessage(t`${dim(`Thinking level: ${next}`)}`);
+    this.updateFooter();
   }
 
   // ==========================================================================
@@ -395,14 +618,12 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     const block: MessageBlock = { type, container };
 
     if (type === "assistant") {
-      // Label
       const label = new TextRenderable(r, {
         width: "100%",
         content: t`${bold(fg(colors.assistantLabel)("Assistant"))}`,
       });
       container.add(label);
 
-      // Markdown body (streaming)
       const md = new MarkdownRenderable(r, {
         width: "100%",
         syntaxStyle: this.syntaxStyle,
@@ -420,7 +641,6 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
       container.add(txt);
       block.text = txt;
     } else {
-      // tool, status
       const txt = new TextRenderable(r, { width: "100%" });
       container.add(txt);
       block.text = txt;
@@ -488,6 +708,8 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     this.messages = [];
     this.totalTokensIn = 0;
     this.totalTokensOut = 0;
+    this.totalCacheRead = 0;
+    this.totalCacheWrite = 0;
   }
 
   // ==========================================================================
@@ -496,11 +718,26 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
 
   private updateFooter(status?: string): void {
     const streaming = this.agent.state.isStreaming;
+    const thinkingLevel = this.agent.state.thinkingLevel;
     const statusText = status ?? (streaming ? "Working..." : "Ready");
-    const tokenInfo =
-      this.totalTokensIn > 0 ? ` | ${this.totalTokensIn}in/${this.totalTokensOut}out` : "";
 
-    this.footer.content = t`${dim(`${statusText}${tokenInfo} | ${this.provider}/${this.modelId}`)}`;
+    const parts: string[] = [statusText];
+
+    if (this.totalTokensIn > 0) {
+      let tokenStr = `\u2191${formatTokenCount(this.totalTokensIn)} \u2193${formatTokenCount(this.totalTokensOut)}`;
+      if (this.totalCacheRead > 0 || this.totalCacheWrite > 0) {
+        tokenStr += ` R${formatTokenCount(this.totalCacheRead)} W${formatTokenCount(this.totalCacheWrite)}`;
+      }
+      parts.push(tokenStr);
+    }
+
+    if (thinkingLevel !== "off") {
+      parts.push(`thinking:${thinkingLevel}`);
+    }
+
+    parts.push(`${this.provider}/${this.modelId}`);
+
+    this.footer.content = t`${dim(parts.join(" | "))}`;
   }
 
   // ==========================================================================
