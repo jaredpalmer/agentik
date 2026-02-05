@@ -3,14 +3,14 @@ import { jsonSchema } from "@ai-sdk/provider-utils";
 import {
   ToolLoopAgent,
   readUIMessageStream,
-  type PrepareStepFunction,
   type ToolLoopAgentOnFinishCallback,
   type ToolLoopAgentOnStepFinishCallback,
   type ToolSet,
+  type UIMessage,
 } from "ai";
+import { createPrepareCall, createPrepareStep } from "./agent-config-utils";
 import type { AgentConfig, AgentToolDefinition } from "./types";
 import { createToolSet } from "./toolset";
-import type { UIMessage } from "ai";
 
 export type SharedMemorySnapshot = Record<string, unknown>;
 
@@ -93,149 +93,6 @@ function uiMessageToText(message: UIMessage): string {
     .join("");
 }
 
-function buildPrepareStep<CALL_OPTIONS>(
-  config: AgentConfig<CALL_OPTIONS>
-): PrepareStepFunction<ToolSet> | undefined {
-  if (!config.prepareStep && !config.resolveModel && !config.thinkingAdapter) {
-    return undefined;
-  }
-
-  return async (options) => {
-    const base = (await config.prepareStep?.(options)) ?? {};
-    const model = base.model ?? options.model;
-    let resolvedModel = model;
-    if (config.resolveModel) {
-      resolvedModel = await config.resolveModel({
-        model,
-        sessionId: config.sessionId,
-      });
-    }
-
-    let providerOptions = base.providerOptions;
-    if (config.thinkingAdapter) {
-      providerOptions = config.thinkingAdapter({
-        providerOptions,
-        thinkingLevel: config.thinkingLevel,
-        thinkingBudgets: config.thinkingBudgets,
-        sessionId: config.sessionId,
-      });
-    }
-
-    return {
-      ...base,
-      model: resolvedModel,
-      ...(providerOptions ? { providerOptions } : {}),
-    };
-  };
-}
-
-function buildPrepareCall<CALL_OPTIONS>(
-  config: AgentConfig<CALL_OPTIONS>
-): AgentConfig<CALL_OPTIONS>["prepareCall"] | undefined {
-  if (!config.prepareCall && !config.resolveModel && !config.thinkingAdapter && !config.getApiKey) {
-    return undefined;
-  }
-
-  return async (settings) => {
-    const base = (await config.prepareCall?.(settings)) ?? settings;
-    let model = base.model;
-    if (config.resolveModel) {
-      model = await config.resolveModel({
-        model,
-        sessionId: config.sessionId,
-        callOptions: (settings as { options?: CALL_OPTIONS }).options,
-      });
-    }
-
-    let providerOptions = base.providerOptions;
-    if (config.thinkingAdapter) {
-      providerOptions = config.thinkingAdapter({
-        providerOptions,
-        thinkingLevel: config.thinkingLevel,
-        thinkingBudgets: config.thinkingBudgets,
-        sessionId: config.sessionId,
-      });
-    }
-
-    const apiKeyHeaders = await resolveApiKeyHeaders(config, model);
-    const headers = mergeHeaders(base.headers, apiKeyHeaders);
-
-    return {
-      ...base,
-      model,
-      ...(providerOptions ? { providerOptions } : {}),
-      ...(headers ? { headers } : {}),
-    };
-  };
-}
-
-function mergeHeaders(
-  base: Record<string, string | undefined> | undefined,
-  extra: Record<string, string> | undefined
-): Record<string, string | undefined> | undefined {
-  if (!extra) {
-    return base;
-  }
-  return { ...(base ?? {}), ...extra };
-}
-
-function getModelIdentity(model: AgentConfig["model"]): { providerId?: string; modelId?: string } {
-  if (typeof model === "string") {
-    if (model.includes("/")) {
-      const [providerId, modelId] = model.split("/", 2);
-      return { providerId, modelId };
-    }
-    if (model.includes(":")) {
-      const [providerId, modelId] = model.split(":", 2);
-      return { providerId, modelId };
-    }
-    return { modelId: model };
-  }
-
-  if (model && typeof model === "object" && "provider" in model && "modelId" in model) {
-    const typed = model as { provider?: string; modelId?: string };
-    return { providerId: typed.provider, modelId: typed.modelId };
-  }
-
-  return {};
-}
-
-async function resolveApiKeyHeaders<CALL_OPTIONS>(
-  config: AgentConfig<CALL_OPTIONS>,
-  model: AgentConfig["model"]
-): Promise<Record<string, string> | undefined> {
-  if (!config.getApiKey) {
-    return undefined;
-  }
-
-  const { providerId, modelId } = getModelIdentity(model);
-  if (!providerId) {
-    return undefined;
-  }
-
-  const apiKey = await config.getApiKey(providerId, modelId);
-  if (!apiKey) {
-    return undefined;
-  }
-
-  if (config.apiKeyHeaders) {
-    return config.apiKeyHeaders({ providerId, modelId, apiKey }) ?? undefined;
-  }
-
-  const normalized = providerId.toLowerCase();
-  if (normalized.includes("anthropic")) {
-    return { "x-api-key": apiKey };
-  }
-  if (normalized.includes("openai") || normalized.includes("openrouter")) {
-    return { Authorization: `Bearer ${apiKey}` };
-  }
-  if (normalized.includes("azure")) {
-    return { "api-key": apiKey };
-  }
-
-  return { Authorization: `Bearer ${apiKey}` };
-}
-
 function buildToolLoopAgent<CALL_OPTIONS>(
   config: AgentConfig<CALL_OPTIONS>,
   tools: AgentToolDefinition[]
@@ -250,8 +107,8 @@ function buildToolLoopAgent<CALL_OPTIONS>(
     stopWhen: config.stopWhen as never,
     output: config.output as never,
     providerOptions: config.providerOptions,
-    prepareStep: buildPrepareStep(config),
-    prepareCall: buildPrepareCall(config),
+    prepareStep: createPrepareStep(config),
+    prepareCall: createPrepareCall(config),
     callOptionsSchema: config.callOptionsSchema,
     onStepFinish: config.onStepFinish as ToolLoopAgentOnStepFinishCallback<ToolSet>,
     onFinish: config.onFinish as ToolLoopAgentOnFinishCallback<ToolSet>,

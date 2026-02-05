@@ -22,6 +22,7 @@ import type {
   ThinkingBudgets,
   ThinkingLevel,
 } from "./types";
+import { createPrepareCall, createPrepareStep } from "./agent-config-utils";
 import { defaultConvertToModelMessages } from "./message-utils";
 import { createToolSet } from "./toolset";
 
@@ -363,6 +364,24 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         args: options.args,
       });
     };
+    const finalizeToolCall = (options: {
+      toolCallId?: string;
+      toolName?: string;
+      result: unknown;
+      isError: boolean;
+    }) => {
+      if (!options.toolCallId || endedToolCalls.has(options.toolCallId)) {
+        return;
+      }
+      this.stateInternal.pendingToolCalls.delete(options.toolCallId);
+      this.emit({
+        type: "tool_execution_end",
+        toolCallId: options.toolCallId,
+        toolName: options.toolName ?? "unknown",
+        result: options.result,
+        isError: options.isError,
+      });
+    };
     const toolSet = createToolSet(this.stateInternal.tools, {
       onStart: ({ toolCallId, toolName, input }) => {
         emitToolExecutionStart({ toolCallId, toolName, args: input });
@@ -482,42 +501,30 @@ export class AgentRuntime<CALL_OPTIONS = never> {
           break;
         case "tool-result":
           currentToolResults.push(streamPart);
-          if (streamPart.toolCallId && !endedToolCalls.has(streamPart.toolCallId)) {
-            this.stateInternal.pendingToolCalls.delete(streamPart.toolCallId);
-            this.emit({
-              type: "tool_execution_end",
-              toolCallId: streamPart.toolCallId,
-              toolName: streamPart.toolName ?? "unknown",
-              result: streamPart.output,
-              isError: false,
-            });
-          }
+          finalizeToolCall({
+            toolCallId: streamPart.toolCallId,
+            toolName: streamPart.toolName,
+            result: streamPart.output,
+            isError: false,
+          });
           break;
         case "tool-error":
           currentToolResults.push(streamPart);
-          if (streamPart.toolCallId && !endedToolCalls.has(streamPart.toolCallId)) {
-            this.stateInternal.pendingToolCalls.delete(streamPart.toolCallId);
-            this.emit({
-              type: "tool_execution_end",
-              toolCallId: streamPart.toolCallId,
-              toolName: streamPart.toolName ?? "unknown",
-              result: streamPart.error,
-              isError: true,
-            });
-          }
+          finalizeToolCall({
+            toolCallId: streamPart.toolCallId,
+            toolName: streamPart.toolName,
+            result: streamPart.error,
+            isError: true,
+          });
           break;
         case "tool-output-denied":
           currentToolResults.push(streamPart);
-          if (streamPart.toolCallId && !endedToolCalls.has(streamPart.toolCallId)) {
-            this.stateInternal.pendingToolCalls.delete(streamPart.toolCallId);
-            this.emit({
-              type: "tool_execution_end",
-              toolCallId: streamPart.toolCallId,
-              toolName: streamPart.toolName ?? "unknown",
-              result: streamPart,
-              isError: true,
-            });
-          }
+          finalizeToolCall({
+            toolCallId: streamPart.toolCallId,
+            toolName: streamPart.toolName,
+            result: streamPart,
+            isError: true,
+          });
           break;
         case "reasoning-start":
         case "reasoning-delta":
@@ -580,143 +587,33 @@ export class AgentRuntime<CALL_OPTIONS = never> {
   }
 
   private buildPrepareStep(): PrepareStepFunction<ToolSet> | undefined {
-    if (!this.prepareStep && !this.resolveModel && !this.thinkingAdapter) {
-      return undefined;
-    }
-
-    return async (options) => {
-      const base = (await this.prepareStep?.(options)) ?? {};
-      const model = base.model ?? options.model;
-      let resolvedModel = model;
-      if (this.resolveModel) {
-        resolvedModel = await this.resolveModel({
-          model,
-          sessionId: this.sessionId,
-        });
-      }
-
-      let providerOptions = base.providerOptions;
-      if (this.thinkingAdapter) {
-        const adapted = this.thinkingAdapter({
-          providerOptions,
-          thinkingLevel: this.thinkingLevel,
-          thinkingBudgets: this.thinkingBudgets,
-          sessionId: this.sessionId,
-        });
-        providerOptions = adapted ?? providerOptions;
-      }
-
-      return {
-        ...base,
-        model: resolvedModel,
-        ...(providerOptions ? { providerOptions } : {}),
-      };
-    };
+    return createPrepareStep(
+      {
+        prepareStep: this.prepareStep,
+        resolveModel: this.resolveModel,
+        thinkingAdapter: this.thinkingAdapter,
+        thinkingLevel: this.thinkingLevel,
+        thinkingBudgets: this.thinkingBudgets,
+        sessionId: this.sessionId,
+      },
+      { preserveProviderOptions: true }
+    );
   }
 
   private buildPrepareCall(): AgentConfig<CALL_OPTIONS>["prepareCall"] | undefined {
-    if (!this.prepareCall && !this.resolveModel && !this.thinkingAdapter && !this.getApiKey) {
-      return undefined;
-    }
-
-    return async (settings) => {
-      const base = (await this.prepareCall?.(settings)) ?? settings;
-      let model = base.model;
-      if (this.resolveModel) {
-        model = await this.resolveModel({
-          model,
-          sessionId: this.sessionId,
-          callOptions: (settings as { options?: CALL_OPTIONS }).options,
-        });
-      }
-
-      let providerOptions = base.providerOptions;
-      if (this.thinkingAdapter) {
-        const adapted = this.thinkingAdapter({
-          providerOptions,
-          thinkingLevel: this.thinkingLevel,
-          thinkingBudgets: this.thinkingBudgets,
-          sessionId: this.sessionId,
-        });
-        providerOptions = adapted ?? providerOptions;
-      }
-
-      const apiKeyHeaders = await this.resolveApiKeyHeaders(model);
-      const headers = this.mergeHeaders(base.headers, apiKeyHeaders);
-
-      return {
-        ...base,
-        model,
-        ...(providerOptions ? { providerOptions } : {}),
-        ...(headers ? { headers } : {}),
-      };
-    };
-  }
-
-  private mergeHeaders(
-    base: Record<string, string | undefined> | undefined,
-    extra: Record<string, string> | undefined
-  ): Record<string, string | undefined> | undefined {
-    if (!extra) {
-      return base;
-    }
-    return { ...(base ?? {}), ...extra };
-  }
-
-  private getModelIdentity(model: LanguageModel): { providerId?: string; modelId?: string } {
-    if (typeof model === "string") {
-      if (model.includes("/")) {
-        const [providerId, modelId] = model.split("/", 2);
-        return { providerId, modelId };
-      }
-      if (model.includes(":")) {
-        const [providerId, modelId] = model.split(":", 2);
-        return { providerId, modelId };
-      }
-      return { modelId: model };
-    }
-
-    if (model && typeof model === "object" && "provider" in model && "modelId" in model) {
-      const typed = model as { provider?: string; modelId?: string };
-      return { providerId: typed.provider, modelId: typed.modelId };
-    }
-
-    return {};
-  }
-
-  private async resolveApiKeyHeaders(
-    model: LanguageModel
-  ): Promise<Record<string, string> | undefined> {
-    if (!this.getApiKey) {
-      return undefined;
-    }
-
-    const { providerId, modelId } = this.getModelIdentity(model);
-    if (!providerId) {
-      return undefined;
-    }
-
-    const apiKey = await this.getApiKey(providerId, modelId);
-    if (!apiKey) {
-      return undefined;
-    }
-
-    if (this.apiKeyHeaders) {
-      return this.apiKeyHeaders({ providerId, modelId, apiKey }) ?? undefined;
-    }
-
-    const normalized = providerId.toLowerCase();
-    if (normalized.includes("anthropic")) {
-      return { "x-api-key": apiKey };
-    }
-    if (normalized.includes("openai") || normalized.includes("openrouter")) {
-      return { Authorization: `Bearer ${apiKey}` };
-    }
-    if (normalized.includes("azure")) {
-      return { "api-key": apiKey };
-    }
-
-    return { Authorization: `Bearer ${apiKey}` };
+    return createPrepareCall(
+      {
+        prepareCall: this.prepareCall,
+        resolveModel: this.resolveModel,
+        thinkingAdapter: this.thinkingAdapter,
+        thinkingLevel: this.thinkingLevel,
+        thinkingBudgets: this.thinkingBudgets,
+        sessionId: this.sessionId,
+        getApiKey: this.getApiKey,
+        apiKeyHeaders: this.apiKeyHeaders,
+      },
+      { preserveProviderOptions: true }
+    );
   }
 
   private buildStopWhen(): StopCondition<ToolSet> | Array<StopCondition<ToolSet>> | undefined {
