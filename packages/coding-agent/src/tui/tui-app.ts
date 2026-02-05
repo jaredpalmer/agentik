@@ -5,10 +5,8 @@ import {
   CliRenderEvents,
   dim,
   fg,
-  stringToStyledText,
   t,
   type KeyBinding,
-  type TextChunk,
   type CliRenderer,
 } from "@opentui/core";
 import type { Agent, AgentEvent, AgentMessage } from "@agentik/runtime";
@@ -66,6 +64,8 @@ export class TuiApp {
   private inputHeight = 1;
   private statusHeight = 1;
   private toolCallEntries = new Map<string, { index: number; toolName: string; args: unknown }>();
+  private subagentEntries = new Map<string, { index: number; subagentId: string }>();
+  private subagentToolCallIds = new Set<string>();
   private maxHistoryLines = 2000;
   private isStopped = false;
   private queuedMessages: Array<{ mode: "steering" | "follow-up"; content: string }> = [];
@@ -302,6 +302,8 @@ export class TuiApp {
     this.currentAssistantIndex = undefined;
     this.isStreaming = false;
     this.toolCallEntries.clear();
+    this.subagentEntries.clear();
+    this.subagentToolCallIds.clear();
     this.queuedMessages = [];
     if (this.exitHintTimeout) {
       clearTimeout(this.exitHintTimeout);
@@ -491,6 +493,9 @@ export class TuiApp {
         break;
       }
       case "tool_execution_start": {
+        if (this.subagentToolCallIds.has(event.toolCallId)) {
+          break;
+        }
         const content = formatToolContent({
           toolName: event.toolName,
           status: "running",
@@ -511,6 +516,9 @@ export class TuiApp {
         break;
       }
       case "tool_execution_update": {
+        if (this.subagentToolCallIds.has(event.toolCallId)) {
+          break;
+        }
         this.upsertToolEntry({
           toolCallId: event.toolCallId,
           toolName: event.toolName,
@@ -521,6 +529,9 @@ export class TuiApp {
         break;
       }
       case "tool_execution_end": {
+        if (this.subagentToolCallIds.has(event.toolCallId)) {
+          break;
+        }
         this.upsertToolEntry({
           toolCallId: event.toolCallId,
           toolName: event.toolName,
@@ -539,6 +550,69 @@ export class TuiApp {
       case "subagent_start":
       case "subagent_update":
       case "subagent_end": {
+        if (event.type === "subagent_start") {
+          this.subagentToolCallIds.add(event.toolCallId);
+          const role = `subagent:${event.subagentId}`;
+          const existingTool = this.toolCallEntries.get(event.toolCallId);
+          let index: number;
+          if (existingTool) {
+            const entry = this.messages[existingTool.index];
+            entry.role = role;
+            entry.label?.setText(this.formatRoleLabel(role));
+            this.applyMessageContent(entry, "");
+            this.toolCallEntries.delete(event.toolCallId);
+            index = existingTool.index;
+          } else {
+            const messageEntry = this.createMessageEntry({ role, content: "" });
+            index = this.messages.push(messageEntry) - 1;
+          }
+          this.subagentEntries.set(event.toolCallId, { index, subagentId: event.subagentId });
+          this.setStatus(`Subagent: ${event.subagentId}`);
+          this.render();
+          break;
+        }
+        if (event.type === "subagent_update") {
+          const existing = this.subagentEntries.get(event.toolCallId);
+          const role = `subagent:${event.subagentId}`;
+          if (!existing) {
+            const messageEntry = this.createMessageEntry({ role, content: event.delta });
+            const index = this.messages.push(messageEntry) - 1;
+            this.subagentEntries.set(event.toolCallId, { index, subagentId: event.subagentId });
+            this.render();
+            break;
+          }
+          const entry = this.messages[existing.index];
+          entry.role = role;
+          entry.content = event.delta;
+          this.applyMessageContent(entry, entry.content);
+          this.render();
+          break;
+        }
+        const existing = this.subagentEntries.get(event.toolCallId);
+        const role = `subagent:${event.subagentId}`;
+        const output = event.output?.trim().length
+          ? event.output
+          : event.isError
+            ? "Subagent error."
+            : "";
+        if (!existing) {
+          const messageEntry = this.createMessageEntry({ role, content: output });
+          this.messages.push(messageEntry);
+        } else {
+          const entry = this.messages[existing.index];
+          entry.role = role;
+          this.applyMessageContent(entry, output);
+        }
+        this.subagentEntries.delete(event.toolCallId);
+        this.subagentToolCallIds.delete(event.toolCallId);
+        if (event.isError) {
+          this.setStatus(`Subagent ${event.subagentId} error`);
+        } else if (this.isStreaming) {
+          this.setStatus("Thinking...");
+        } else {
+          this.setStatus("Ready");
+        }
+        this.render();
         break;
       }
       case "error": {
@@ -747,6 +821,9 @@ export class TuiApp {
   }
 
   private colorForRole(role: string): string {
+    if (role.startsWith("subagent:")) {
+      return colors.codex;
+    }
     switch (role) {
       case "assistant":
         return "#9ecbff";
@@ -817,6 +894,14 @@ export class TuiApp {
       }
     }
     this.toolCallEntries = updated;
+    const updatedSubagents = new Map<string, { index: number; subagentId: string }>();
+    for (const [toolCallId, entry] of this.subagentEntries.entries()) {
+      const nextIndex = entry.index - removeCount;
+      if (nextIndex >= 0) {
+        updatedSubagents.set(toolCallId, { ...entry, index: nextIndex });
+      }
+    }
+    this.subagentEntries = updatedSubagents;
   }
 
   private formatError(error: unknown): string {

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "agentik-coding-agent-tui-refresh",
-  "last_updated": "2026-02-05 13:40:47 -0500",
+  "last_updated": "2026-02-05 13:42:46 -0500",
   "instructions": {
     "resume": [
       "Run ./init.sh first to restore context.",
@@ -226,7 +226,7 @@
     {
       "id": "F08",
       "title": "TUI: subagent lanes and streaming",
-      "status": "pending",
+      "status": "done",
       "depends_on": ["F01", "F07"],
       "files": ["packages/coding-agent/src/tui/tui-app.ts"],
       "steps": [

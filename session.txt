@@ -77,6 +77,11 @@ f2db0cc Add GH Actions
 - Updated features.json status and timestamp.
 - Validation: manual TUI run not performed yet.
 
+2026-02-05 13:42:46 -0500
+- Completed F08: wired subagent events in the TUI and suppressed duplicate tool-call entries.
+- Updated features.json status and timestamp.
+- Validation: manual subagent TUI run not performed yet.
+
 2026-02-05 13:35:42 -0500
 - Ran init.sh to restore context.
 - Git status: ## main...origin/main [ahead 9]
