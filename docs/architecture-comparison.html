@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentik vs Pi-Mono Architecture Comparison</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3348;
+    --text: #e2e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #7c6bf5;
+    --accent-dim: #5a4dc7;
+    --blue: #3b82f6;
+    --green: #10b981;
+    --red: #ef4444;
+    --orange: #f97316;
+    --pink: #ec4899;
+    --amber: #f59e0b;
+    --gray: #6b7280;
+    --cyan: #06b6d4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: 1fr auto;
+    height: 100vh;
+  }
+
+  .sidebar {
+    grid-row: 1 / 3;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .sidebar h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    margin-top: 20px;
+  }
+
+  .sidebar h2:first-child { margin-top: 0; }
+
+  .sidebar h1 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--accent);
+  }
+
+  .sidebar .subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .preset-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 8px;
+    font-size: 11px;
+    color: var(--text);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .preset-btn.active { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+
+  .layer-toggles label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .layer-toggles input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+  }
+
+  .layer-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .conn-toggles label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .conn-toggles input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+  }
+
+  .conn-line {
+    width: 20px;
+    height: 2px;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .comment-list {
+    margin-top: 8px;
+  }
+
+  .comment-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+
+  .comment-item .target {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 12px;
+  }
+
+  .comment-item .file {
+    color: var(--text-dim);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+  }
+
+  .comment-item .text {
+    margin-top: 4px;
+    color: var(--text);
+  }
+
+  .comment-item .del-btn {
+    float: right;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+  }
+
+  .comment-item .del-btn:hover { color: var(--red); }
+
+  .canvas-area {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .canvas-area svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .zoom-controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+  }
+
+  .zoom-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+  }
+
+  .zoom-btn:hover { border-color: var(--accent); }
+
+  .framework-labels {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 40px;
+    z-index: 10;
+  }
+
+  .fw-label {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 6px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .fw-label.agentik { color: var(--accent); border-color: var(--accent-dim); }
+  .fw-label.pimono { color: var(--cyan); border-color: #0e7490; }
+
+  .prompt-area {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .prompt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .prompt-header span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+  }
+
+  .copy-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 5px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .copy-btn:hover { background: var(--accent-dim); }
+
+  .prompt-text {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    width: 400px;
+    max-width: 90vw;
+  }
+
+  .modal h3 {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .modal .modal-file {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  .modal textarea {
+    width: 100%;
+    height: 80px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px;
+    font-family: inherit;
+    font-size: 12px;
+    resize: vertical;
+    margin-bottom: 12px;
+  }
+
+  .modal textarea:focus { outline: none; border-color: var(--accent); }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .modal-actions button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .modal-actions .cancel {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .modal-actions .save {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .legend {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    z-index: 10;
+    font-size: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .legend-line {
+    width: 24px;
+    height: 2px;
+  }
+
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <div class="sidebar">
+    <h1>Architecture Compare</h1>
+    <div class="subtitle">Agentik Runtime vs Pi-Mono Agent</div>
+
+    <h2>View Presets</h2>
+    <div class="preset-grid" id="presets"></div>
+
+    <h2>Layers</h2>
+    <div class="layer-toggles" id="layers"></div>
+
+    <h2>Connections</h2>
+    <div class="conn-toggles" id="connections"></div>
+
+    <h2>Comments (<span id="comment-count">0</span>)</h2>
+    <div class="comment-list" id="comment-list"></div>
+  </div>
+
+  <div class="canvas-area" id="canvas-area">
+    <div class="framework-labels">
+      <div class="fw-label agentik">@agentik/runtime</div>
+      <div class="fw-label pimono">@pi-mono/agent</div>
+    </div>
+    <div class="zoom-controls">
+      <button class="zoom-btn" onclick="zoomIn()">+</button>
+      <button class="zoom-btn" onclick="zoomOut()">&minus;</button>
+      <button class="zoom-btn" onclick="zoomReset()" style="font-size:11px">1:1</button>
+    </div>
+    <div class="legend" id="legend"></div>
+    <svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <div class="prompt-area">
+    <div class="prompt-header">
+      <span>Generated Prompt</span>
+      <button class="copy-btn" onclick="copyPrompt()">Copy Prompt</button>
+    </div>
+    <div class="prompt-text" id="prompt-output"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title"></h3>
+    <div class="modal-file" id="modal-file"></div>
+    <textarea id="modal-textarea" placeholder="Add your comment about this component..."></textarea>
+    <div class="modal-actions">
+      <button class="cancel" onclick="closeModal()">Cancel</button>
+      <button class="save" onclick="saveComment()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Data ──────────────────────────────────────────────────────────────
+const LAYERS = {
+  'public-api':   { label: 'Public API',       color: '#dbeafe', dot: '#3b82f6' },
+  'core':         { label: 'Core Runtime',      color: '#dcfce7', dot: '#10b981' },
+  'execution':    { label: 'Execution Loop',    color: '#fef3c7', dot: '#f59e0b' },
+  'tools':        { label: 'Tools & Schema',    color: '#f3e8ff', dot: '#a855f7' },
+  'events':       { label: 'Events & Stream',   color: '#fce7f3', dot: '#ec4899' },
+  'session':      { label: 'Session & Context', color: '#e0f2fe', dot: '#0ea5e9' },
+  'config':       { label: 'Config & Hooks',    color: '#fff7ed', dot: '#f97316' },
+};
+
+const CONN_TYPES = {
+  'data-flow':   { label: 'Data Flow',        color: '#3b82f6', dash: '' },
+  'tool-call':   { label: 'Tool Execution',   color: '#10b981', dash: '6,3' },
+  'event':       { label: 'Event Emission',    color: '#ef4444', dash: '4,4' },
+  'hook':        { label: 'Hook / Transform',  color: '#f97316', dash: '8,4' },
+  'equivalent':  { label: 'Equivalent Concept', color: '#94a3b8', dash: '4,6' },
+};
+
+const MID_X = 560;
+const AX = 60;   // Agentik base X
+const PX = 620;  // Pi-mono base X
+
+const nodes = [
+  // ─── AGENTIK side ───
+  { id: 'a-agent', label: 'Agent', subtitle: 'agent.ts', x: AX, y: 60, w: 140, h: 42, layer: 'public-api', fw: 'agentik',
+    detail: 'Public API wrapper. Wraps AgentRuntime + optional SessionStore. Methods: prompt(), continue(), subscribe(), abort(), reset(), loadSession().' },
+  { id: 'a-config', label: 'AgentConfig', subtitle: 'types.ts', x: AX + 170, y: 60, w: 140, h: 42, layer: 'config', fw: 'agentik',
+    detail: 'Constructor options: model, tools, instructions, prepareStep, transformContext, convertToModelMessages, resolveModel, thinkingAdapter, streamFn, etc.' },
+
+  { id: 'a-runtime', label: 'AgentRuntime', subtitle: 'agent-runtime.ts', x: AX, y: 130, w: 150, h: 42, layer: 'core', fw: 'agentik',
+    detail: 'Core execution engine. Manages AgentState, runs ToolLoopAgent from AI SDK v6, emits events, processes steering/follow-up queues.' },
+  { id: 'a-state', label: 'AgentState', subtitle: 'types.ts', x: AX + 180, y: 130, w: 130, h: 42, layer: 'core', fw: 'agentik',
+    detail: 'instructions, model, thinkingLevel, tools[], messages[], streamMessage, pendingToolCalls, isStreaming, error.' },
+
+  { id: 'a-loop', label: 'ToolLoopAgent', subtitle: 'AI SDK v6', x: AX + 40, y: 200, w: 150, h: 42, layer: 'execution', fw: 'agentik',
+    detail: 'External dependency (AI SDK). Runs stream->tool->stream loop. Agentik wraps with event emission and queue checks between turns.' },
+  { id: 'a-steering', label: 'Steering Queue', subtitle: 'agent-runtime.ts', x: AX + 220, y: 200, w: 130, h: 42, layer: 'execution', fw: 'agentik',
+    detail: 'Interrupt-based. Injected before next turn via stop condition. Can skip pending tool calls. Modes: one-at-a-time | all.' },
+  { id: 'a-followup', label: 'Follow-up Queue', subtitle: 'agent-runtime.ts', x: AX + 380, y: 200, w: 130, h: 42, layer: 'execution', fw: 'agentik',
+    detail: 'Appended after current turn completes. Does not interrupt. Modes: one-at-a-time | all.' },
+
+  { id: 'a-events', label: 'AgentEvent', subtitle: 'types.ts', x: AX, y: 275, w: 140, h: 42, layer: 'events', fw: 'agentik',
+    detail: 'Union: agent_start/end, turn_start/end, message_start/update/end, tool_execution_start/update/end, stream_part, error.' },
+  { id: 'a-messages', label: 'AgentMessage', subtitle: 'types.ts', x: AX + 170, y: 275, w: 140, h: 42, layer: 'events', fw: 'agentik',
+    detail: 'ModelMessage | CustomAgentMessage. Extensible via CustomAgentMessages interface. Roles: system, user, assistant, tool + custom.' },
+
+  { id: 'a-tooldef', label: 'AgentToolDefinition', subtitle: 'types.ts', x: AX, y: 345, w: 170, h: 42, layer: 'tools', fw: 'agentik',
+    detail: 'name, description, inputSchema (FlexibleSchema), execute, toModelOutput, needsApproval, outputSchema. Streaming via AsyncIterable.' },
+  { id: 'a-toolset', label: 'createToolSet()', subtitle: 'toolset.ts', x: AX + 200, y: 345, w: 140, h: 42, layer: 'tools', fw: 'agentik',
+    detail: 'Converts AgentToolDefinition[] to AI SDK ToolSet. Lifecycle: onStart -> shouldSkip -> execute -> onUpdate -> onEnd.' },
+
+  { id: 'a-session', label: 'SessionManager', subtitle: 'sessions/', x: AX, y: 415, w: 150, h: 42, layer: 'session', fw: 'agentik',
+    detail: 'JSONL tree with branching. Entry types: message, thinkingLevelChange, modelChange, compaction, branchSummary, label, sessionInfo.' },
+  { id: 'a-compact', label: 'compact()', subtitle: 'sessions/compact.ts', x: AX + 180, y: 415, w: 130, h: 42, layer: 'session', fw: 'agentik',
+    detail: 'Token estimation (1 char ~ 4 tokens). Keeps recent, summarizes old. Compaction entry injected via transformContext.' },
+
+  { id: 'a-hooks', label: 'Hooks (9)', subtitle: 'agent-runtime.ts', x: AX + 100, y: 480, w: 150, h: 42, layer: 'config', fw: 'agentik',
+    detail: 'transformContext, convertToModelMessages, prepareStep, prepareCall, thinkingAdapter, resolveModel, getApiKey, apiKeyHeaders, streamFn.' },
+
+  // ─── PI-MONO side ───
+  { id: 'p-agent', label: 'Agent', subtitle: 'agent.ts', x: PX, y: 60, w: 140, h: 42, layer: 'public-api', fw: 'pimono',
+    detail: 'Stateful wrapper around agentLoop. Methods: prompt(), continue(), subscribe(), abort(), waitForIdle(), reset(). State via setters.' },
+  { id: 'p-options', label: 'AgentOptions', subtitle: 'types.ts', x: PX + 170, y: 60, w: 140, h: 42, layer: 'config', fw: 'pimono',
+    detail: 'initialState, convertToLlm, transformContext, steeringMode, followUpMode, streamFn, sessionId, getApiKey, thinkingBudgets.' },
+
+  { id: 'p-state', label: 'AgentState', subtitle: 'types.ts', x: PX, y: 130, w: 130, h: 42, layer: 'core', fw: 'pimono',
+    detail: 'systemPrompt, model, thinkingLevel, tools, messages, isStreaming, streamMessage, pendingToolCalls, error.' },
+  { id: 'p-model', label: 'Model<TApi>', subtitle: 'pi-ai', x: PX + 160, y: 130, w: 130, h: 42, layer: 'core', fw: 'pimono',
+    detail: 'id, name, api type, provider, baseUrl, reasoning flag, contextWindow, cost, maxTokens. Multi-provider with getModel().' },
+
+  { id: 'p-loop', label: 'agentLoop()', subtitle: 'agent-loop.ts', x: PX + 40, y: 200, w: 150, h: 42, layer: 'execution', fw: 'pimono',
+    detail: 'Pure async generator (417 lines). agentLoop() adds prompts, agentLoopContinue() retries. Yields AgentEvent, returns via result().' },
+  { id: 'p-steering', label: 'Steering Queue', subtitle: 'agent.ts', x: PX + 220, y: 200, w: 130, h: 42, layer: 'execution', fw: 'pimono',
+    detail: 'agent.steer(). After current tool, skips remaining with error results, injects messages. Modes: one-at-a-time | all.' },
+  { id: 'p-followup', label: 'Follow-up Queue', subtitle: 'agent.ts', x: PX + 380, y: 200, w: 130, h: 42, layer: 'execution', fw: 'pimono',
+    detail: 'agent.followUp(). Checked when no tool calls remain. Injects messages, continues loop. Modes: one-at-a-time | all.' },
+
+  { id: 'p-events', label: 'AgentEvent', subtitle: 'types.ts', x: PX, y: 275, w: 140, h: 42, layer: 'events', fw: 'pimono',
+    detail: 'Union: agent_start/end, turn_start/end, message_start/update/end, tool_execution_start/update/end. 13+ event types.' },
+  { id: 'p-messages', label: 'AgentMessage', subtitle: 'types.ts', x: PX + 170, y: 275, w: 140, h: 42, layer: 'events', fw: 'pimono',
+    detail: 'Message | CustomAgentMessages. Extensible via TS declaration merging. Built-in roles: user, assistant, toolResult + custom.' },
+
+  { id: 'p-tooldef', label: 'AgentTool', subtitle: 'types.ts', x: PX, y: 345, w: 150, h: 42, layer: 'tools', fw: 'pimono',
+    detail: 'Extends pi-ai Tool. name, label, parameters (TypeBox), execute(id, params, signal, onUpdate). Returns { content, details }.' },
+  { id: 'p-stream', label: 'EventStream<T,R>', subtitle: 'pi-ai', x: PX + 180, y: 345, w: 150, h: 42, layer: 'tools', fw: 'pimono',
+    detail: 'Generic async event queue: push(), end(), async iteration, result(). Used for both AssistantMessage and Agent event streams.' },
+
+  { id: 'p-proxy', label: 'streamProxy()', subtitle: 'proxy.ts', x: PX, y: 415, w: 150, h: 42, layer: 'session', fw: 'pimono',
+    detail: 'Routes LLM calls through backend. Strips partial field for bandwidth. Reconstructs messages client-side. Auth token injection.' },
+  { id: 'p-context', label: 'transformContext', subtitle: 'agent.ts', x: PX + 180, y: 415, w: 150, h: 42, layer: 'session', fw: 'pimono',
+    detail: 'Called before each LLM call. Can prune, summarize, or inject context. Has AbortSignal. Returns AgentMessage[].' },
+
+  { id: 'p-hooks', label: 'Hooks (6)', subtitle: 'types.ts', x: PX + 100, y: 480, w: 150, h: 42, layer: 'config', fw: 'pimono',
+    detail: 'convertToLlm, transformContext, getApiKey, getSteeringMessages, getFollowUpMessages, streamFn.' },
+];
+
+const connections = [
+  // ─── AGENTIK internal ───
+  { from: 'a-agent', to: 'a-runtime', type: 'data-flow', label: 'wraps' },
+  { from: 'a-config', to: 'a-agent', type: 'data-flow', label: 'configures' },
+  { from: 'a-runtime', to: 'a-state', type: 'data-flow', label: 'manages' },
+  { from: 'a-runtime', to: 'a-loop', type: 'tool-call', label: 'delegates' },
+  { from: 'a-runtime', to: 'a-events', type: 'event', label: 'emits' },
+  { from: 'a-runtime', to: 'a-steering', type: 'data-flow', label: 'checks' },
+  { from: 'a-runtime', to: 'a-followup', type: 'data-flow', label: 'checks' },
+  { from: 'a-loop', to: 'a-toolset', type: 'tool-call', label: 'executes' },
+  { from: 'a-tooldef', to: 'a-toolset', type: 'data-flow', label: 'registered' },
+  { from: 'a-agent', to: 'a-session', type: 'data-flow', label: 'records' },
+  { from: 'a-session', to: 'a-compact', type: 'hook', label: 'compacts' },
+  { from: 'a-hooks', to: 'a-runtime', type: 'hook', label: 'extends' },
+  { from: 'a-events', to: 'a-messages', type: 'data-flow', label: 'carries' },
+
+  // ─── PI-MONO internal ───
+  { from: 'p-agent', to: 'p-loop', type: 'data-flow', label: 'calls' },
+  { from: 'p-options', to: 'p-agent', type: 'data-flow', label: 'configures' },
+  { from: 'p-agent', to: 'p-state', type: 'data-flow', label: 'manages' },
+  { from: 'p-agent', to: 'p-events', type: 'event', label: 'emits' },
+  { from: 'p-agent', to: 'p-steering', type: 'data-flow', label: 'checks' },
+  { from: 'p-agent', to: 'p-followup', type: 'data-flow', label: 'checks' },
+  { from: 'p-loop', to: 'p-tooldef', type: 'tool-call', label: 'executes' },
+  { from: 'p-loop', to: 'p-stream', type: 'event', label: 'yields' },
+  { from: 'p-agent', to: 'p-proxy', type: 'data-flow', label: 'optional' },
+  { from: 'p-hooks', to: 'p-agent', type: 'hook', label: 'extends' },
+  { from: 'p-events', to: 'p-messages', type: 'data-flow', label: 'carries' },
+  { from: 'p-context', to: 'p-loop', type: 'hook', label: 'transforms' },
+
+  // ─── Cross-mapping (equivalents) ───
+  { from: 'a-agent', to: 'p-agent', type: 'equivalent', label: 'same API surface' },
+  { from: 'a-state', to: 'p-state', type: 'equivalent', label: 'same shape' },
+  { from: 'a-events', to: 'p-events', type: 'equivalent', label: 'same event types' },
+  { from: 'a-messages', to: 'p-messages', type: 'equivalent', label: 'both extensible' },
+  { from: 'a-steering', to: 'p-steering', type: 'equivalent', label: 'same mechanism' },
+  { from: 'a-followup', to: 'p-followup', type: 'equivalent', label: 'same mechanism' },
+  { from: 'a-hooks', to: 'p-hooks', type: 'equivalent', label: '9 vs 6 hooks' },
+  { from: 'a-tooldef', to: 'p-tooldef', type: 'equivalent', label: 'similar shape' },
+];
+
+// ─── State ─────────────────────────────────────────────────────────────
+const PRESETS = {
+  'Full System':    { layers: Object.keys(LAYERS), conns: Object.keys(CONN_TYPES) },
+  'Execution Flow': { layers: ['public-api','core','execution'], conns: ['data-flow','tool-call'] },
+  'Events & Data':  { layers: ['events','tools','core'], conns: ['data-flow','event'] },
+  'Hooks & Config': { layers: ['config','core','execution','session'], conns: ['hook','data-flow'] },
+  'Tools Only':     { layers: ['tools','execution'], conns: ['tool-call','data-flow'] },
+  'Cross-Mapping':  { layers: Object.keys(LAYERS), conns: ['equivalent'] },
+};
+
+const state = {
+  preset: 'Full System',
+  layers: {},
+  conns: {},
+  zoom: 1,
+  panX: 0, panY: 0,
+  comments: [],
+  modalNode: null,
+};
+
+Object.keys(LAYERS).forEach(function(k) { state.layers[k] = true; });
+Object.keys(CONN_TYPES).forEach(function(k) { state.conns[k] = true; });
+
+// ─── DOM helpers ───────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+function getNode(id) { return nodes.find(function(n) { return n.id === id; }); }
+function nodeCenter(n) { return { x: n.x + n.w / 2, y: n.y + n.h / 2 }; }
+
+function escapeHtml(str) {
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ─── SVG Rendering ─────────────────────────────────────────────────────
+function buildSVG() {
+  var svg = el('diagram');
+  // Clear existing children
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  var ns = 'http://www.w3.org/2000/svg';
+
+  // Defs
+  var defs = document.createElementNS(ns, 'defs');
+  Object.keys(CONN_TYPES).forEach(function(type) {
+    var cfg = CONN_TYPES[type];
+    var marker = document.createElementNS(ns, 'marker');
+    marker.setAttribute('id', 'arrow-' + type);
+    marker.setAttribute('markerWidth', '8');
+    marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('refX', '7');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    var poly = document.createElementNS(ns, 'polygon');
+    poly.setAttribute('points', '0 0, 8 3, 0 6');
+    poly.setAttribute('fill', cfg.color);
+    marker.appendChild(poly);
+    defs.appendChild(marker);
+  });
+  svg.appendChild(defs);
+
+  // Viewport group
+  var vp = document.createElementNS(ns, 'g');
+  vp.setAttribute('id', 'viewport');
+  vp.setAttribute('transform', 'translate(' + state.panX + ',' + state.panY + ') scale(' + state.zoom + ')');
+
+  // Divider
+  var divLine = document.createElementNS(ns, 'line');
+  divLine.setAttribute('x1', MID_X); divLine.setAttribute('y1', '40');
+  divLine.setAttribute('x2', MID_X); divLine.setAttribute('y2', '530');
+  divLine.setAttribute('stroke', '#2e3348');
+  divLine.setAttribute('stroke-width', '1');
+  divLine.setAttribute('stroke-dasharray', '8 4');
+  vp.appendChild(divLine);
+
+  // Connections
+  connections.forEach(function(conn) {
+    if (!state.conns[conn.type]) return;
+    var fromN = getNode(conn.from);
+    var toN = getNode(conn.to);
+    if (!fromN || !toN) return;
+    if (!state.layers[fromN.layer] || !state.layers[toN.layer]) return;
+
+    var from = nodeCenter(fromN);
+    var to = nodeCenter(toN);
+    var cfg = CONN_TYPES[conn.type];
+
+    var d;
+    if (conn.type === 'equivalent') {
+      var cp = Math.abs(to.x - from.x) * 0.4;
+      d = 'M' + from.x + ',' + from.y + ' C' + (from.x + cp) + ',' + from.y + ' ' + (to.x - cp) + ',' + to.y + ' ' + to.x + ',' + to.y;
+    } else {
+      var dy = to.y - from.y;
+      var dx = to.x - from.x;
+      if (Math.abs(dy) > Math.abs(dx) * 0.3) {
+        d = 'M' + from.x + ',' + (from.y + fromN.h/2 - 1) + ' C' + from.x + ',' + (from.y + dy*0.5) + ' ' + to.x + ',' + (to.y - dy*0.5) + ' ' + to.x + ',' + (to.y - toN.h/2 + 1);
+      } else {
+        var dir = to.x > from.x ? 1 : -1;
+        d = 'M' + (from.x + dir * fromN.w/2) + ',' + from.y + ' C' + (from.x + dx*0.5) + ',' + from.y + ' ' + (to.x - dx*0.5) + ',' + to.y + ' ' + (to.x - dir * toN.w/2) + ',' + to.y;
+      }
+    }
+
+    var path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', cfg.color);
+    path.setAttribute('stroke-width', '1.5');
+    if (cfg.dash) path.setAttribute('stroke-dasharray', cfg.dash);
+    path.setAttribute('marker-end', 'url(#arrow-' + conn.type + ')');
+    if (conn.type === 'equivalent') {
+      path.setAttribute('opacity', '0.4');
+      path.setAttribute('stroke-dasharray', '4 6');
+    }
+    vp.appendChild(path);
+  });
+
+  // Nodes
+  nodes.forEach(function(n) {
+    if (!state.layers[n.layer]) return;
+    var layerCfg = LAYERS[n.layer];
+    var hasComment = state.comments.some(function(c) { return c.target === n.id; });
+    var strokeColor = hasComment ? '#7c6bf5' : (n.fw === 'agentik' ? 'rgba(67,56,202,0.2)' : 'rgba(6,96,153,0.2)');
+
+    var g = document.createElementNS(ns, 'g');
+    g.setAttribute('style', 'cursor:pointer');
+    g.addEventListener('click', function() { openModal(n.id); });
+    g.addEventListener('mouseenter', function() {
+      rect.setAttribute('filter', 'brightness(1.2)');
+      rect.setAttribute('stroke', hasComment ? '#7c6bf5' : (n.fw === 'agentik' ? '#7c6bf5' : '#06b6d4'));
+      rect.setAttribute('stroke-width', '2');
+    });
+    g.addEventListener('mouseleave', function() {
+      rect.removeAttribute('filter');
+      rect.setAttribute('stroke', strokeColor);
+      rect.setAttribute('stroke-width', hasComment ? '2' : '1');
+    });
+
+    var rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', n.x); rect.setAttribute('y', n.y);
+    rect.setAttribute('width', n.w); rect.setAttribute('height', n.h);
+    rect.setAttribute('rx', '6'); rect.setAttribute('ry', '6');
+    rect.setAttribute('fill', layerCfg.color);
+    rect.setAttribute('stroke', strokeColor);
+    rect.setAttribute('stroke-width', hasComment ? '2' : '1');
+    rect.setAttribute('opacity', '0.92');
+    g.appendChild(rect);
+
+    var title = document.createElementNS(ns, 'text');
+    title.setAttribute('x', n.x + n.w/2); title.setAttribute('y', n.y + 17);
+    title.setAttribute('text-anchor', 'middle');
+    title.setAttribute('font-size', '11'); title.setAttribute('font-weight', '600');
+    title.setAttribute('fill', '#1e293b');
+    title.textContent = n.label;
+    g.appendChild(title);
+
+    var sub = document.createElementNS(ns, 'text');
+    sub.setAttribute('x', n.x + n.w/2); sub.setAttribute('y', n.y + 31);
+    sub.setAttribute('text-anchor', 'middle');
+    sub.setAttribute('font-size', '9'); sub.setAttribute('fill', '#64748b');
+    sub.setAttribute('font-family', 'monospace');
+    sub.textContent = n.subtitle;
+    g.appendChild(sub);
+
+    if (hasComment) {
+      var circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', n.x + n.w - 6); circle.setAttribute('cy', n.y + 6);
+      circle.setAttribute('r', '5'); circle.setAttribute('fill', '#7c6bf5');
+      g.appendChild(circle);
+
+      var pen = document.createElementNS(ns, 'text');
+      pen.setAttribute('x', n.x + n.w - 6); pen.setAttribute('y', n.y + 9.5);
+      pen.setAttribute('text-anchor', 'middle');
+      pen.setAttribute('font-size', '7'); pen.setAttribute('fill', '#fff');
+      pen.setAttribute('font-weight', '700');
+      pen.textContent = '\u270E';
+      g.appendChild(pen);
+    }
+
+    vp.appendChild(g);
+  });
+
+  svg.appendChild(vp);
+}
+
+// ─── Sidebar Rendering ─────────────────────────────────────────────────
+function renderSidebar() {
+  // Presets
+  var presetEl = el('presets');
+  while (presetEl.firstChild) presetEl.removeChild(presetEl.firstChild);
+  Object.keys(PRESETS).forEach(function(name) {
+    var btn = document.createElement('button');
+    btn.className = 'preset-btn' + (state.preset === name ? ' active' : '');
+    btn.textContent = name;
+    btn.addEventListener('click', function() { applyPreset(name); });
+    presetEl.appendChild(btn);
+  });
+
+  // Layers
+  var layerEl = el('layers');
+  while (layerEl.firstChild) layerEl.removeChild(layerEl.firstChild);
+  Object.keys(LAYERS).forEach(function(key) {
+    var cfg = LAYERS[key];
+    var label = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = state.layers[key];
+    cb.addEventListener('change', function() { toggleLayer(key); });
+    var dot = document.createElement('span');
+    dot.className = 'layer-dot';
+    dot.style.background = cfg.dot;
+    label.appendChild(cb);
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(' ' + cfg.label));
+    layerEl.appendChild(label);
+  });
+
+  // Connections
+  var connEl = el('connections');
+  while (connEl.firstChild) connEl.removeChild(connEl.firstChild);
+  Object.keys(CONN_TYPES).forEach(function(key) {
+    var cfg = CONN_TYPES[key];
+    var label = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = state.conns[key];
+    cb.addEventListener('change', function() { toggleConn(key); });
+    var line = document.createElement('span');
+    line.className = 'conn-line';
+    if (cfg.dash) {
+      line.style.background = 'repeating-linear-gradient(90deg, ' + cfg.color + ' 0 4px, transparent 4px 8px)';
+    } else {
+      line.style.background = cfg.color;
+    }
+    label.appendChild(cb);
+    label.appendChild(line);
+    label.appendChild(document.createTextNode(' ' + cfg.label));
+    connEl.appendChild(label);
+  });
+
+  // Comments
+  el('comment-count').textContent = state.comments.length;
+  var listEl = el('comment-list');
+  while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+  if (state.comments.length === 0) {
+    var hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:var(--text-dim);padding:4px 0;';
+    hint.textContent = 'Click any component to add a comment.';
+    listEl.appendChild(hint);
+  } else {
+    state.comments.forEach(function(c, i) {
+      var item = document.createElement('div');
+      item.className = 'comment-item';
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'del-btn';
+      delBtn.textContent = '\u2715';
+      delBtn.addEventListener('click', function() { deleteComment(i); });
+      item.appendChild(delBtn);
+
+      var tgt = document.createElement('div');
+      tgt.className = 'target';
+      tgt.textContent = c.targetLabel;
+      item.appendChild(tgt);
+
+      var file = document.createElement('div');
+      file.className = 'file';
+      file.textContent = c.targetFile;
+      item.appendChild(file);
+
+      var txt = document.createElement('div');
+      txt.className = 'text';
+      txt.textContent = c.text;
+      item.appendChild(txt);
+
+      listEl.appendChild(item);
+    });
+  }
+
+  // Legend
+  var legendEl = el('legend');
+  while (legendEl.firstChild) legendEl.removeChild(legendEl.firstChild);
+  Object.keys(CONN_TYPES).forEach(function(key) {
+    if (!state.conns[key]) return;
+    var cfg = CONN_TYPES[key];
+    var item = document.createElement('div');
+    item.className = 'legend-item';
+    var line = document.createElement('span');
+    line.className = 'legend-line';
+    if (cfg.dash) {
+      line.style.background = 'repeating-linear-gradient(90deg, ' + cfg.color + ' 0 4px, transparent 4px 8px)';
+    } else {
+      line.style.background = cfg.color;
+    }
+    line.style.height = '2px';
+    item.appendChild(line);
+    item.appendChild(document.createTextNode(cfg.label));
+    legendEl.appendChild(item);
+  });
+}
+
+// ─── Prompt ────────────────────────────────────────────────────────────
+function updatePrompt() {
+  var visibleLayerNames = [];
+  Object.keys(state.layers).forEach(function(k) {
+    if (state.layers[k]) visibleLayerNames.push(LAYERS[k].label);
+  });
+
+  var parts = [];
+  parts.push('I\'m comparing the architecture of @agentik/runtime and @pi-mono/agent (pi-agent-core).');
+
+  if (visibleLayerNames.length < Object.keys(LAYERS).length) {
+    parts.push('\nCurrently focused on: ' + visibleLayerNames.join(', ') + '.');
+  }
+
+  if (state.conns['equivalent']) {
+    parts.push('\nKey equivalences:');
+    parts.push('- Both have an Agent class as the public API with prompt()/continue()/subscribe()/abort()');
+    parts.push('- Both use AgentState with nearly identical shape (messages, tools, model, streaming state)');
+    parts.push('- Both have AgentEvent union types with the same lifecycle events');
+    parts.push('- Both have steering + follow-up queues with one-at-a-time | all modes');
+    parts.push('- Both support extensible custom message types');
+  }
+
+  parts.push('\nKey differences:');
+  parts.push('- Agentik wraps AI SDK v6 ToolLoopAgent; pi-mono has its own agentLoop() async generator');
+  parts.push('- Agentik has a separate AgentRuntime class under Agent; pi-mono puts loop logic in standalone functions');
+  parts.push('- Agentik has full SessionManager with JSONL tree, branching, and compaction; pi-mono has streamProxy for backend routing');
+  parts.push('- Agentik tools use FlexibleSchema; pi-mono uses TypeBox (@sinclair/typebox)');
+  parts.push('- Agentik has ~9 hooks; pi-mono has ~6 extensibility points');
+  parts.push('- Pi-mono has a dedicated Model<TApi> abstraction with multi-provider support; Agentik uses AI SDK\'s LanguageModel');
+
+  if (state.comments.length > 0) {
+    parts.push('\nFeedback on specific components:');
+    state.comments.forEach(function(c) {
+      var node = getNode(c.target);
+      var fw = node.fw === 'agentik' ? '@agentik/runtime' : '@pi-mono/agent';
+      parts.push('\n**' + c.targetLabel + '** (' + fw + ' \u2014 ' + c.targetFile + '):\n' + c.text);
+    });
+  }
+
+  el('prompt-output').textContent = parts.join('\n');
+}
+
+function updateAll() {
+  buildSVG();
+  renderSidebar();
+  updatePrompt();
+}
+
+// ─── Actions ───────────────────────────────────────────────────────────
+function applyPreset(name) {
+  state.preset = name;
+  var p = PRESETS[name];
+  Object.keys(LAYERS).forEach(function(k) { state.layers[k] = p.layers.indexOf(k) !== -1; });
+  Object.keys(CONN_TYPES).forEach(function(k) { state.conns[k] = p.conns.indexOf(k) !== -1; });
+  updateAll();
+}
+
+function toggleLayer(key) {
+  state.layers[key] = !state.layers[key];
+  state.preset = '';
+  updateAll();
+}
+
+function toggleConn(key) {
+  state.conns[key] = !state.conns[key];
+  state.preset = '';
+  updateAll();
+}
+
+function zoomIn() { state.zoom = Math.min(2, state.zoom + 0.15); buildSVG(); }
+function zoomOut() { state.zoom = Math.max(0.4, state.zoom - 0.15); buildSVG(); }
+function zoomReset() { state.zoom = 1; state.panX = 0; state.panY = 0; buildSVG(); }
+
+function openModal(nodeId) {
+  var node = getNode(nodeId);
+  state.modalNode = node;
+  el('modal-title').textContent = node.label + ' (' + (node.fw === 'agentik' ? 'Agentik' : 'Pi-Mono') + ')';
+  el('modal-file').textContent = node.subtitle + '\n' + node.detail;
+  el('modal-textarea').value = '';
+  el('modal').classList.add('open');
+  setTimeout(function() { el('modal-textarea').focus(); }, 50);
+}
+
+function closeModal() {
+  el('modal').classList.remove('open');
+  state.modalNode = null;
+}
+
+function saveComment() {
+  var text = el('modal-textarea').value.trim();
+  if (!text || !state.modalNode) return;
+  state.comments.push({
+    id: Date.now(),
+    target: state.modalNode.id,
+    targetLabel: state.modalNode.label,
+    targetFile: state.modalNode.subtitle,
+    text: text
+  });
+  closeModal();
+  updateAll();
+}
+
+function deleteComment(index) {
+  state.comments.splice(index, 1);
+  updateAll();
+}
+
+function copyPrompt() {
+  var text = el('prompt-output').textContent;
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy Prompt'; }, 1500);
+  });
+}
+
+// ─── Pan & Zoom ────────────────────────────────────────────────────────
+var isPanning = false, panStartX = 0, panStartY = 0;
+var canvasArea = el('canvas-area');
+
+canvasArea.addEventListener('mousedown', function(e) {
+  if (e.target.closest('g') || e.target.closest('.zoom-btn') || e.target.closest('.fw-label') || e.target.closest('.legend')) return;
+  isPanning = true;
+  panStartX = e.clientX - state.panX;
+  panStartY = e.clientY - state.panY;
+  canvasArea.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mousemove', function(e) {
+  if (!isPanning) return;
+  state.panX = e.clientX - panStartX;
+  state.panY = e.clientY - panStartY;
+  buildSVG();
+});
+
+window.addEventListener('mouseup', function() {
+  isPanning = false;
+  canvasArea.style.cursor = '';
+});
+
+canvasArea.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var delta = e.deltaY > 0 ? -0.08 : 0.08;
+  state.zoom = Math.max(0.4, Math.min(2, state.zoom + delta));
+  buildSVG();
+}, { passive: false });
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Enter' && e.metaKey && el('modal').classList.contains('open')) saveComment();
+});
+
+// ─── Init ──────────────────────────────────────────────────────────────
+updateAll();
+</script>
+</body>
+</html>
