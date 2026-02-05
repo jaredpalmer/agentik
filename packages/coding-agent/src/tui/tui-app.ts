@@ -159,24 +159,7 @@ export class TuiApp {
     this.renderer.start();
     this.input.focus();
     this.input.on(InputRenderableEvents.ENTER, (value: string) => {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        if (this.input) {
-          this.input.value = "";
-        }
-        return;
-      }
-      if (this.isStreaming) {
-        this.queueMessage(trimmed, "steering");
-        if (this.input) {
-          this.input.value = "";
-        }
-        return;
-      }
-      if (this.input) {
-        this.input.value = "";
-      }
-      this.submitPrompt(trimmed);
+      this.handleInputSubmit(value, "steering", { clearOnEmpty: true });
     });
     this.renderer.on("resize", () => this.render());
     this.renderer.keyInput.on("keypress", (key) => {
@@ -189,19 +172,13 @@ export class TuiApp {
       const isEnter = key.name === "return" || key.name === "enter";
       const alt = (key as { alt?: boolean }).alt ?? false;
       if (isEnter && alt && this.input) {
-        const trimmed = this.input.value.trim();
-        if (!trimmed) {
+        const value = this.input.value;
+        if (!value.trim()) {
           return;
         }
         key.preventDefault();
         key.stopPropagation();
-        if (this.isStreaming) {
-          this.queueMessage(trimmed, "follow-up");
-          this.input.value = "";
-          return;
-        }
-        this.input.value = "";
-        this.submitPrompt(trimmed);
+        this.handleInputSubmit(value, "follow-up", { clearOnEmpty: false });
         return;
       }
       if (key.name === "escape") {
@@ -282,6 +259,33 @@ export class TuiApp {
       this.exitHintTimeout = undefined;
     }
     this.exitHintActive = false;
+  }
+
+  private clearInput(): void {
+    if (this.input) {
+      this.input.value = "";
+    }
+  }
+
+  private handleInputSubmit(
+    value: string,
+    mode: "steering" | "follow-up",
+    options: { clearOnEmpty: boolean }
+  ): void {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      if (options.clearOnEmpty) {
+        this.clearInput();
+      }
+      return;
+    }
+    if (this.isStreaming) {
+      this.queueMessage(trimmed, mode);
+      this.clearInput();
+      return;
+    }
+    this.clearInput();
+    this.submitPrompt(trimmed);
   }
 
   private submitPrompt(prompt: string): void {
@@ -456,57 +460,22 @@ export class TuiApp {
         break;
       }
       case "tool_execution_update": {
-        const existing = this.toolCallEntries.get(event.toolCallId);
-        const index =
-          existing?.index ??
-          this.messages.push(
-            this.createMessageEntry({
-              role: "tool",
-              content: this.formatToolContent({
-                toolName: event.toolName,
-                status: "running",
-                args: existing?.args,
-              }),
-            })
-          ) - 1;
-        const content = this.formatToolContent({
+        this.upsertToolEntry({
+          toolCallId: event.toolCallId,
           toolName: event.toolName,
           status: "running",
-          args: existing?.args,
           output: this.extractToolOutput(event.partialResult),
         });
-        this.applyMessageContent(this.messages[index], content);
-        if (!existing) {
-          this.toolCallEntries.set(event.toolCallId, {
-            index,
-            toolName: event.toolName,
-            args: undefined,
-          });
-        }
         this.render();
         break;
       }
       case "tool_execution_end": {
-        const existing = this.toolCallEntries.get(event.toolCallId);
-        const index =
-          existing?.index ??
-          this.messages.push(
-            this.createMessageEntry({
-              role: "tool",
-              content: this.formatToolContent({
-                toolName: event.toolName,
-                status: event.isError ? "error" : "done",
-                args: existing?.args,
-              }),
-            })
-          ) - 1;
-        const content = this.formatToolContent({
+        this.upsertToolEntry({
+          toolCallId: event.toolCallId,
           toolName: event.toolName,
           status: event.isError ? "error" : "done",
-          args: existing?.args,
           output: this.extractToolOutput(event.result),
         });
-        this.applyMessageContent(this.messages[index], content);
         this.toolCallEntries.delete(event.toolCallId);
         if (this.isStreaming) {
           this.setStatus("Thinking...");
@@ -592,6 +561,43 @@ export class TuiApp {
     this.applyMessageContent(entry, message.content);
 
     return entry;
+  }
+
+  private upsertToolEntry(options: {
+    toolCallId: string;
+    toolName: string;
+    status: "running" | "done" | "error";
+    args?: unknown;
+    output?: unknown;
+  }): void {
+    const existing = this.toolCallEntries.get(options.toolCallId);
+    const args = options.args ?? existing?.args;
+    const index =
+      existing?.index ??
+      this.messages.push(
+        this.createMessageEntry({
+          role: "tool",
+          content: this.formatToolContent({
+            toolName: options.toolName,
+            status: options.status,
+            args,
+          }),
+        })
+      ) - 1;
+    if (!existing) {
+      this.toolCallEntries.set(options.toolCallId, {
+        index,
+        toolName: options.toolName,
+        args,
+      });
+    }
+    const content = this.formatToolContent({
+      toolName: options.toolName,
+      status: options.status,
+      args,
+      output: options.output,
+    });
+    this.applyMessageContent(this.messages[index], content);
   }
 
   private applyMessageContent(entry: MessageEntry, content: string): void {
@@ -699,54 +705,35 @@ export class TuiApp {
     return this.formatUnknown(value, { errorFallback: "Error" });
   }
 
+  private pushSummaryLine(lines: string[], label: string, value: unknown): void {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+    lines.push(`  - ${label}: ${this.formatValue(value)}`);
+  }
+
   private summarizeToolArgs(toolName: string, args: unknown): string[] {
     if (!args || typeof args !== "object") {
       return [];
     }
     const record = args as Record<string, unknown>;
-    const lines: string[] = [];
-    const push = (label: string, value: unknown) => {
-      if (value === undefined || value === null || value === "") {
-        return;
-      }
-      lines.push(`  - ${label}: ${this.formatValue(value)}`);
-    };
-
     switch (toolName) {
       case "read":
       case "write":
       case "edit":
       case "update":
-        push("path", record.path);
-        break;
+        return this.summarizePathArgs(record);
       case "list":
-        push("path", record.path ?? ".");
-        if (record.limit != null) {
-          push("limit", record.limit);
-        }
-        break;
+        return this.summarizeListArgs(record);
       case "glob":
-        push("pattern", record.pattern);
-        push("path", record.path ?? ".");
-        if (record.limit != null) {
-          push("limit", record.limit);
-        }
-        break;
+        return this.summarizeGlobArgs(record);
       case "bash":
-        push("command", record.command);
-        break;
+        return this.summarizeBashArgs(record);
       case "webfetch":
-        push("url", record.url);
-        if (record.method && record.method !== "GET") {
-          push("method", record.method);
-        }
-        break;
+        return this.summarizeWebFetchArgs(record);
       default:
-        push("args", args);
-        break;
+        return this.summarizeGenericArgs(args);
     }
-
-    return lines;
   }
 
   private summarizeToolOutput(
@@ -756,84 +743,147 @@ export class TuiApp {
     args?: unknown
   ): string[] {
     if (status === "error") {
-      if (output == null) {
-        return ["  - error: unknown error"];
-      }
-      return [`  - error: ${this.formatValue(output)}`];
+      return this.summarizeErrorOutput(output);
     }
 
     switch (toolName) {
       case "read": {
-        if (typeof output !== "string") {
-          return output === undefined ? [] : [`  - result: ${this.formatValue(output)}`];
-        }
-        const { linesShown, rangeLabel } = this.summarizeReadOutput(output, args);
-        const lines: string[] = [];
-        if (rangeLabel) {
-          lines.push(`  - range: ${rangeLabel}`);
-        }
-        lines.push(`  - result: ${linesShown} line${linesShown === 1 ? "" : "s"}`);
-        return lines;
+        return this.summarizeReadToolOutput(output, args);
       }
       case "list": {
-        if (typeof output !== "string") {
-          return output === undefined ? [] : [`  - result: ${this.formatValue(output)}`];
-        }
-        const count = this.countPrimaryLines(output);
-        return [`  - entries: ${count}`];
+        return this.summarizeCountOutput(output, "entries");
       }
       case "glob": {
-        if (typeof output !== "string") {
-          return output === undefined ? [] : [`  - result: ${this.formatValue(output)}`];
-        }
-        const count = this.countPrimaryLines(output);
-        return [`  - matches: ${count}`];
+        return this.summarizeCountOutput(output, "matches");
       }
       case "webfetch": {
-        if (typeof output !== "string") {
-          return output === undefined ? [] : [`  - result: ${this.formatValue(output)}`];
-        }
-        const { statusLine, contentType } = this.extractWebFetchSummary(output);
-        const lines: string[] = [];
-        if (statusLine) {
-          lines.push(`  - ${statusLine}`);
-        }
-        if (contentType) {
-          lines.push(`  - ${contentType}`);
-        }
-        return lines;
+        return this.summarizeWebFetchOutput(output);
       }
       case "bash": {
-        if (output === undefined) {
-          return [];
-        }
-        const text = this.formatValue(output);
-        const { exitLine, body } = this.splitBashOutput(text);
-        const lines: string[] = [];
-        if (exitLine) {
-          lines.push(`  - ${exitLine}`);
-        }
-        if (body.trim().length > 0) {
-          lines.push("  - output:");
-          lines.push(...this.indentLines(body, "    "));
-        }
-        return lines;
+        return this.summarizeBashOutput(output);
       }
       case "write":
       case "edit":
       case "update": {
-        if (output === undefined) {
-          return [];
-        }
-        return [`  - result: ${this.formatValue(output)}`];
+        return this.summarizeResultOutput(output);
       }
       default: {
-        if (output === undefined) {
-          return [];
-        }
-        return [`  - result: ${this.formatValue(output)}`];
+        return this.summarizeResultOutput(output);
       }
     }
+  }
+
+  private summarizePathArgs(record: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+    this.pushSummaryLine(lines, "path", record.path);
+    return lines;
+  }
+
+  private summarizeListArgs(record: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+    this.pushSummaryLine(lines, "path", record.path ?? ".");
+    if (record.limit != null) {
+      this.pushSummaryLine(lines, "limit", record.limit);
+    }
+    return lines;
+  }
+
+  private summarizeGlobArgs(record: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+    this.pushSummaryLine(lines, "pattern", record.pattern);
+    this.pushSummaryLine(lines, "path", record.path ?? ".");
+    if (record.limit != null) {
+      this.pushSummaryLine(lines, "limit", record.limit);
+    }
+    return lines;
+  }
+
+  private summarizeBashArgs(record: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+    this.pushSummaryLine(lines, "command", record.command);
+    return lines;
+  }
+
+  private summarizeWebFetchArgs(record: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+    this.pushSummaryLine(lines, "url", record.url);
+    if (record.method && record.method !== "GET") {
+      this.pushSummaryLine(lines, "method", record.method);
+    }
+    return lines;
+  }
+
+  private summarizeGenericArgs(args: unknown): string[] {
+    const lines: string[] = [];
+    this.pushSummaryLine(lines, "args", args);
+    return lines;
+  }
+
+  private summarizeErrorOutput(output: unknown): string[] {
+    if (output == null) {
+      return ["  - error: unknown error"];
+    }
+    return [`  - error: ${this.formatValue(output)}`];
+  }
+
+  private summarizeResultOutput(output: unknown): string[] {
+    if (output === undefined) {
+      return [];
+    }
+    return [`  - result: ${this.formatValue(output)}`];
+  }
+
+  private summarizeCountOutput(output: unknown, label: string): string[] {
+    if (typeof output !== "string") {
+      return this.summarizeResultOutput(output);
+    }
+    const count = this.countPrimaryLines(output);
+    return [`  - ${label}: ${count}`];
+  }
+
+  private summarizeReadToolOutput(output: unknown, args?: unknown): string[] {
+    if (typeof output !== "string") {
+      return this.summarizeResultOutput(output);
+    }
+    const { linesShown, rangeLabel } = this.summarizeReadOutput(output, args);
+    const lines: string[] = [];
+    if (rangeLabel) {
+      lines.push(`  - range: ${rangeLabel}`);
+    }
+    lines.push(`  - result: ${linesShown} line${linesShown === 1 ? "" : "s"}`);
+    return lines;
+  }
+
+  private summarizeWebFetchOutput(output: unknown): string[] {
+    if (typeof output !== "string") {
+      return this.summarizeResultOutput(output);
+    }
+    const { statusLine, contentType } = this.extractWebFetchSummary(output);
+    const lines: string[] = [];
+    if (statusLine) {
+      lines.push(`  - ${statusLine}`);
+    }
+    if (contentType) {
+      lines.push(`  - ${contentType}`);
+    }
+    return lines;
+  }
+
+  private summarizeBashOutput(output: unknown): string[] {
+    if (output === undefined) {
+      return [];
+    }
+    const text = this.formatValue(output);
+    const { exitLine, body } = this.splitBashOutput(text);
+    const lines: string[] = [];
+    if (exitLine) {
+      lines.push(`  - ${exitLine}`);
+    }
+    if (body.trim().length > 0) {
+      lines.push("  - output:");
+      lines.push(...this.indentLines(body, "    "));
+    }
+    return lines;
   }
 
   private summarizeReadOutput(

@@ -32,7 +32,8 @@
     "suggested_change": "Extract an upsert helper that resolves/creates the tool entry, applies formatted content, and updates toolCallEntries, then call it from both branches with the appropriate status/output.",
     "rationale": "Keeps tool UI handling consistent and reduces the chance of subtle divergence when the tool display format changes.",
     "risk": "low",
-    "effort": "small"
+    "effort": "small",
+    "status": "completed"
   },
   {
     "id": "SUG-004",
@@ -48,7 +49,8 @@
     "suggested_change": "Move resolvePadding to a shared helper (for example, components/padding.ts) and reuse it in each component.",
     "rationale": "Centralizing the logic avoids repeated code and ensures padding behavior stays consistent if the rules ever change.",
     "risk": "low",
-    "effort": "small"
+    "effort": "small",
+    "status": "completed"
   },
   {
     "id": "SUG-005",
@@ -62,7 +64,8 @@
     "suggested_change": "Add a small helper (for example, clearInput and submitFromInput) to unify the logic for both handlers.",
     "rationale": "Reduces duplication and makes future changes to input handling less error-prone.",
     "risk": "low",
-    "effort": "small"
+    "effort": "small",
+    "status": "completed"
   },
   {
     "id": "SUG-006",
@@ -76,6 +79,7 @@
     "suggested_change": "Split each tool’s formatter into small per-tool helpers or a map of tool handlers, keeping the main methods as a simple dispatcher.",
     "rationale": "Shorter, focused helpers improve readability and make it easier to add new tools without growing the switch blocks.",
     "risk": "low",
-    "effort": "medium"
+    "effort": "medium",
+    "status": "completed"
   }
 ]

@@ -1,5 +1,5 @@
 import type { LanguageModel, PrepareStepFunction, ToolSet } from "ai";
-import type { AgentConfig, ThinkingBudgets, ThinkingLevel } from "./types";
+import type { AgentConfig } from "./types";
 
 type PrepareStepConfig<CALL_OPTIONS = never> = Pick<
   AgentConfig<CALL_OPTIONS>,

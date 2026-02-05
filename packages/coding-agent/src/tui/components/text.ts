@@ -1,42 +1,10 @@
 import { TextRenderable, type TextOptions, type CliRenderer, type StyledText } from "@opentui/core";
-
-type TextPaddingOptions = {
-  paddingX?: number;
-  paddingY?: number;
-  paddingLeft?: number | `${number}%`;
-  paddingRight?: number | `${number}%`;
-  paddingTop?: number | `${number}%`;
-  paddingBottom?: number | `${number}%`;
-};
+import { resolvePadding, type PaddingOptions } from "./padding";
 
 export type TextBlockOptions = Omit<TextOptions, "content"> &
-  TextPaddingOptions & {
+  PaddingOptions & {
     text?: string | StyledText;
   };
-
-function resolvePadding(options: TextPaddingOptions): Partial<TextPaddingOptions> {
-  const resolved: Partial<TextPaddingOptions> = {};
-
-  const left = options.paddingLeft ?? options.paddingX;
-  const right = options.paddingRight ?? options.paddingX;
-  const top = options.paddingTop ?? options.paddingY;
-  const bottom = options.paddingBottom ?? options.paddingY;
-
-  if (left !== undefined) {
-    resolved.paddingLeft = left;
-  }
-  if (right !== undefined) {
-    resolved.paddingRight = right;
-  }
-  if (top !== undefined) {
-    resolved.paddingTop = top;
-  }
-  if (bottom !== undefined) {
-    resolved.paddingBottom = bottom;
-  }
-
-  return resolved;
-}
 
 export class TextBlock extends TextRenderable {
   constructor(renderer: CliRenderer, options: TextBlockOptions = {}) {
