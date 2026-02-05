@@ -71,3 +71,44 @@ f2db0cc Add GH Actions
 2026-02-05 13:30:45 -0500
 - Completed F06: added status/footer builders and wired footer/status updates in TuiApp.
 - Updated features.json status and timestamp.
+
+2026-02-05 13:41:34 -0500
+- Completed F07: extracted tool-call formatting, added status indicators and truncation, and styled tool summaries.
+- Updated features.json status and timestamp.
+- Validation: manual TUI run not performed yet.
+
+2026-02-05 13:35:42 -0500
+- Ran init.sh to restore context.
+- Git status: ## main...origin/main [ahead 9]
+- Recent commits (for subagent context):
+82624b9 tui: add status and footer hints
+a4dd251 tui: add textarea composer
+241493f tui: refactor layout structure
+b3b63de tui: add theme tokens
+18d4189 cli: add subagent config
+ef3d569 runtime: emit subagent events
+073d482 chore: add planning assets
+29633c9 Add docs for later work
+709fd97 Bump agents.md
+cc8729f Revmove review.json
+241add0 refactor: simplify tui helpers
+dfd9cf8 refactor: share agent config prep logic
+6154440 Fix agents
+fd89367 Collapse to a single package
+8689093 Combine runtime and sdk into one thing
+2ce170a Add steering/follow-up queues with docs and examples
+da0fff3 Improve plan
+c5d6533 Add runnable examples and plan future ones
+dba2c36 Improve readme
+e9ef5fc Improve the readme
+6260f6d Improve the readme
+8fca3e4 Rename agent package to runtime
+3aacff3 Improve readme
+9c262ff Rename agent-core to agent and agent-sdk to sdk
+5931525 Rename OpenAgent to Agentik
+38e5d11 Handle interrupt shortcuts
+2c1f621 Handle TUI shutdown on Ctrl+C
+f465cb2 Add readme
+fee58e1 Fix tool events and error reporting
+5c38ad9 Add ai sdk skill
+- Note: session.txt can be mined for context and history of work done.

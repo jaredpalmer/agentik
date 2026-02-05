@@ -23,6 +23,7 @@ import {
   buildStatusText,
 } from "./components";
 import { colors } from "./theme";
+import { formatToolContent, formatToolStyledText } from "./tool-call-formatter";
 
 type DisplayMessage = {
   role: string;
@@ -490,7 +491,7 @@ export class TuiApp {
         break;
       }
       case "tool_execution_start": {
-        const content = this.formatToolContent({
+        const content = formatToolContent({
           toolName: event.toolName,
           status: "running",
           args: event.args,
@@ -632,7 +633,7 @@ export class TuiApp {
       this.messages.push(
         this.createMessageEntry({
           role: "tool",
-          content: this.formatToolContent({
+          content: formatToolContent({
             toolName: options.toolName,
             status: options.status,
             args,
@@ -646,7 +647,7 @@ export class TuiApp {
         args,
       });
     }
-    const content = this.formatToolContent({
+    const content = formatToolContent({
       toolName: options.toolName,
       status: options.status,
       args,
@@ -680,7 +681,7 @@ export class TuiApp {
 
   private formatTextBody(role: string, content: string): string | StyledText {
     if (role === "tool") {
-      return this.formatToolStyledText(content);
+      return formatToolStyledText(content);
     }
     if (role === "error") {
       return t`${fg("#cc6666")(content)}`;
@@ -733,328 +734,11 @@ export class TuiApp {
     return JSON.stringify(message, null, 2);
   }
 
-  private formatToolContent(options: {
-    toolName: string;
-    status: "running" | "done" | "error";
-    args?: unknown;
-    output?: unknown;
-  }): string {
-    const lines: string[] = [];
-    const statusLabel = options.status === "error" ? "error" : options.status;
-    lines.push(`${options.toolName} (${statusLabel})`);
-    lines.push(...this.summarizeToolArgs(options.toolName, options.args));
-    lines.push(
-      ...this.summarizeToolOutput(options.toolName, options.output, options.status, options.args)
-    );
-    return lines.join("\n");
-  }
-
   private extractToolOutput(value: unknown): unknown {
     if (value && typeof value === "object" && "output" in value) {
       return (value as { output?: unknown }).output;
     }
     return value;
-  }
-
-  private formatValue(value: unknown): string {
-    return this.formatUnknown(value, { errorFallback: "Error" });
-  }
-
-  private pushSummaryLine(lines: string[], label: string, value: unknown): void {
-    if (value === undefined || value === null || value === "") {
-      return;
-    }
-    lines.push(`  - ${label}: ${this.formatValue(value)}`);
-  }
-
-  private summarizeToolArgs(toolName: string, args: unknown): string[] {
-    if (!args || typeof args !== "object") {
-      return [];
-    }
-    const record = args as Record<string, unknown>;
-    switch (toolName) {
-      case "read":
-      case "write":
-      case "edit":
-      case "update":
-        return this.summarizePathArgs(record);
-      case "list":
-        return this.summarizeListArgs(record);
-      case "glob":
-        return this.summarizeGlobArgs(record);
-      case "bash":
-        return this.summarizeBashArgs(record);
-      case "webfetch":
-        return this.summarizeWebFetchArgs(record);
-      default:
-        return this.summarizeGenericArgs(args);
-    }
-  }
-
-  private summarizeToolOutput(
-    toolName: string,
-    output: unknown,
-    status: "running" | "done" | "error",
-    args?: unknown
-  ): string[] {
-    if (status === "error") {
-      return this.summarizeErrorOutput(output);
-    }
-
-    switch (toolName) {
-      case "read": {
-        return this.summarizeReadToolOutput(output, args);
-      }
-      case "list": {
-        return this.summarizeCountOutput(output, "entries");
-      }
-      case "glob": {
-        return this.summarizeCountOutput(output, "matches");
-      }
-      case "webfetch": {
-        return this.summarizeWebFetchOutput(output);
-      }
-      case "bash": {
-        return this.summarizeBashOutput(output);
-      }
-      case "write":
-      case "edit":
-      case "update": {
-        return this.summarizeResultOutput(output);
-      }
-      default: {
-        return this.summarizeResultOutput(output);
-      }
-    }
-  }
-
-  private summarizePathArgs(record: Record<string, unknown>): string[] {
-    const lines: string[] = [];
-    this.pushSummaryLine(lines, "path", record.path);
-    return lines;
-  }
-
-  private summarizeListArgs(record: Record<string, unknown>): string[] {
-    const lines: string[] = [];
-    this.pushSummaryLine(lines, "path", record.path ?? ".");
-    if (record.limit != null) {
-      this.pushSummaryLine(lines, "limit", record.limit);
-    }
-    return lines;
-  }
-
-  private summarizeGlobArgs(record: Record<string, unknown>): string[] {
-    const lines: string[] = [];
-    this.pushSummaryLine(lines, "pattern", record.pattern);
-    this.pushSummaryLine(lines, "path", record.path ?? ".");
-    if (record.limit != null) {
-      this.pushSummaryLine(lines, "limit", record.limit);
-    }
-    return lines;
-  }
-
-  private summarizeBashArgs(record: Record<string, unknown>): string[] {
-    const lines: string[] = [];
-    this.pushSummaryLine(lines, "command", record.command);
-    return lines;
-  }
-
-  private summarizeWebFetchArgs(record: Record<string, unknown>): string[] {
-    const lines: string[] = [];
-    this.pushSummaryLine(lines, "url", record.url);
-    if (record.method && record.method !== "GET") {
-      this.pushSummaryLine(lines, "method", record.method);
-    }
-    return lines;
-  }
-
-  private summarizeGenericArgs(args: unknown): string[] {
-    const lines: string[] = [];
-    this.pushSummaryLine(lines, "args", args);
-    return lines;
-  }
-
-  private summarizeErrorOutput(output: unknown): string[] {
-    if (output == null) {
-      return ["  - error: unknown error"];
-    }
-    return [`  - error: ${this.formatValue(output)}`];
-  }
-
-  private summarizeResultOutput(output: unknown): string[] {
-    if (output === undefined) {
-      return [];
-    }
-    return [`  - result: ${this.formatValue(output)}`];
-  }
-
-  private summarizeCountOutput(output: unknown, label: string): string[] {
-    if (typeof output !== "string") {
-      return this.summarizeResultOutput(output);
-    }
-    const count = this.countPrimaryLines(output);
-    return [`  - ${label}: ${count}`];
-  }
-
-  private summarizeReadToolOutput(output: unknown, args?: unknown): string[] {
-    if (typeof output !== "string") {
-      return this.summarizeResultOutput(output);
-    }
-    const { linesShown, rangeLabel } = this.summarizeReadOutput(output, args);
-    const lines: string[] = [];
-    if (rangeLabel) {
-      lines.push(`  - range: ${rangeLabel}`);
-    }
-    lines.push(`  - result: ${linesShown} line${linesShown === 1 ? "" : "s"}`);
-    return lines;
-  }
-
-  private summarizeWebFetchOutput(output: unknown): string[] {
-    if (typeof output !== "string") {
-      return this.summarizeResultOutput(output);
-    }
-    const { statusLine, contentType } = this.extractWebFetchSummary(output);
-    const lines: string[] = [];
-    if (statusLine) {
-      lines.push(`  - ${statusLine}`);
-    }
-    if (contentType) {
-      lines.push(`  - ${contentType}`);
-    }
-    return lines;
-  }
-
-  private summarizeBashOutput(output: unknown): string[] {
-    if (output === undefined) {
-      return [];
-    }
-    const text = this.formatValue(output);
-    const { exitLine, body } = this.splitBashOutput(text);
-    const lines: string[] = [];
-    if (exitLine) {
-      lines.push(`  - ${exitLine}`);
-    }
-    if (body.trim().length > 0) {
-      lines.push("  - output:");
-      lines.push(...this.indentLines(body, "    "));
-    }
-    return lines;
-  }
-
-  private summarizeReadOutput(
-    output: string,
-    args?: unknown
-  ): { linesShown: number; rangeLabel?: string } {
-    const { body } = this.splitOutputBody(output);
-    const linesShown = body.length > 0 ? body.split("\n").length : 0;
-    const rangeFromOutput = this.parseRangeFromReadOutput(output);
-    if (rangeFromOutput) {
-      return { linesShown, rangeLabel: rangeFromOutput };
-    }
-
-    if (args && typeof args === "object") {
-      const record = args as Record<string, unknown>;
-      const offset = typeof record.offset === "number" ? record.offset : undefined;
-      if (offset !== undefined && linesShown > 0) {
-        const end = offset + linesShown - 1;
-        return { linesShown, rangeLabel: `${offset}-${end}` };
-      }
-    }
-
-    return { linesShown };
-  }
-
-  private parseRangeFromReadOutput(output: string): string | undefined {
-    const match = output.match(/Showing lines (\d+)-(\d+) of (\d+)/);
-    if (!match) {
-      return undefined;
-    }
-    return `${match[1]}-${match[2]} of ${match[3]}`;
-  }
-
-  private countPrimaryLines(output: string): number {
-    const { body } = this.splitOutputBody(output);
-    if (!body.trim()) {
-      return 0;
-    }
-    return body.split("\n").filter((line) => line.trim().length > 0).length;
-  }
-
-  private splitOutputBody(output: string): { body: string; meta?: string } {
-    const metaIndex = output.indexOf("\n\n[");
-    if (metaIndex === -1) {
-      return { body: output };
-    }
-    return { body: output.slice(0, metaIndex), meta: output.slice(metaIndex + 2) };
-  }
-
-  private extractWebFetchSummary(output: string): { statusLine?: string; contentType?: string } {
-    const lines = output.split("\n");
-    const statusLine = lines.find((line) => line.startsWith("Status:"));
-    const contentType = lines.find((line) => line.startsWith("Content-Type:"));
-    return { statusLine, contentType };
-  }
-
-  private splitBashOutput(output: string): { exitLine?: string; body: string } {
-    const lines = output.split("\n");
-    const first = lines[0];
-    if (first && first.startsWith("Exit code:")) {
-      return { exitLine: first, body: lines.slice(1).join("\n").trimStart() };
-    }
-    return { body: output };
-  }
-
-  private indentLines(text: string, indent: string): string[] {
-    if (!text) {
-      return [];
-    }
-    return text.split("\n").map((line) => `${indent}${line}`);
-  }
-
-  private formatToolStyledText(content: string): StyledText {
-    const [header, ...rest] = content.split("\n");
-    const headerStyled = t`${fg("#7aa2b8")(header ?? "")}`;
-    const restStyled = this.formatToolBody(rest);
-    const separator = rest.length > 0 ? stringToStyledText("\n") : null;
-    return new StyledText([
-      ...headerStyled.chunks,
-      ...(separator ? separator.chunks : []),
-      ...restStyled.chunks,
-    ]);
-  }
-
-  private formatToolBody(lines: string[]): StyledText {
-    const chunks: TextChunk[] = [];
-    lines.forEach((line, index) => {
-      if (index > 0) {
-        chunks.push(...stringToStyledText("\n").chunks);
-      }
-      if (line.startsWith("  - ")) {
-        const tail = line.slice(4);
-        const colonIndex = tail.indexOf(":");
-        if (colonIndex > 0) {
-          const label = tail.slice(0, colonIndex);
-          const value = tail.slice(colonIndex + 1);
-          const valueWithSpace = value.startsWith(" ") ? value : ` ${value}`;
-          const styled = t`${dim("  - ")}${fg("#9aa0a6")(label)}:${valueWithSpace}`;
-          chunks.push(...styled.chunks);
-        } else {
-          const styled = t`${dim("  - ")}${tail}`;
-          chunks.push(...styled.chunks);
-        }
-        return;
-      }
-
-      if (line.startsWith("    ")) {
-        const rest = line.slice(4);
-        const styled = t`${dim("    ")}${rest}`;
-        chunks.push(...styled.chunks);
-        return;
-      }
-
-      chunks.push(...stringToStyledText(line).chunks);
-    });
-    return new StyledText(chunks);
   }
 
   private formatRoleLabel(role: string): StyledText {
