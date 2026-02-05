@@ -55,3 +55,7 @@ f2db0cc Add GH Actions
 2026-02-05 13:21:25 -0500
 - Completed F02: CLI loads subagent configs from env/file, registers subagent tools.
 - Updated features.json status and timestamp.
+
+2026-02-05 13:22:55 -0500
+- Completed F03: added TUI theme tokens and simplified markdown theme to Codex-style ANSI colors.
+- Updated features.json status and timestamp.
