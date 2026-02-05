@@ -1,13 +1,3 @@
-/**
- * OpenTUI-based terminal interface for the agentik coding agent.
- *
- * Layout (vertical flex):
- *   Header  – banner with model info & keybindings
- *   Chat    – scrollable message area (sticky-bottom)
- *   Input   – multi-line textarea with border (color = thinking level)
- *   Footer  – token stats / model / thinking level
- */
-
 import {
   type CliRenderer,
   type KeyEvent,
@@ -34,10 +24,6 @@ import type {
 } from "@agentik/agent";
 import { colors, createSyntaxStyle, getThinkingBorderColor } from "./theme.js";
 
-// ============================================================================
-// Types
-// ============================================================================
-
 interface TuiOptions {
   agent: Agent;
   provider: string;
@@ -58,10 +44,6 @@ interface PendingTool {
   startTime: number;
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
 function formatTokenCount(n: number): string {
@@ -78,7 +60,6 @@ function summarizeToolArgs(toolName: string, args: unknown): string {
     case "bash":
       return typeof a.command === "string" ? truncate(a.command, 60) : "";
     case "read_file":
-      return typeof a.file_path === "string" ? a.file_path : "";
     case "write_file":
       return typeof a.file_path === "string" ? a.file_path : "";
     case "edit": {
@@ -138,10 +119,6 @@ function summarizeToolResult(result: unknown, isError: boolean): string {
   return "";
 }
 
-// ============================================================================
-// TUI Application
-// ============================================================================
-
 export class TuiApp {
   private renderer!: CliRenderer;
   private agent: Agent;
@@ -149,16 +126,12 @@ export class TuiApp {
   private modelId: string;
   private toolNames: string[];
   private syntaxStyle!: SyntaxStyle;
-
-  // Layout components
   private root!: BoxRenderable;
   private header!: TextRenderable;
   private chatScroll!: ScrollBoxRenderable;
   private inputBox!: BoxRenderable;
   private textarea!: TextareaRenderable;
   private footer!: TextRenderable;
-
-  // State
   private messages: MessageBlock[] = [];
   private pendingTools = new Map<string, PendingTool>();
   private currentAssistant: MessageBlock | null = null;
@@ -185,7 +158,7 @@ export class TuiApp {
     this.renderer = await createCliRenderer({
       exitOnCtrlC: false,
       useAlternateScreen: true,
-      useMouse: false,
+      useMouse: true,
       autoFocus: true,
     });
 
@@ -194,10 +167,6 @@ export class TuiApp {
     this.wireInput();
     this.updateFooter();
   }
-
-  // ==========================================================================
-  // Layout
-  // ==========================================================================
 
   private buildLayout(): void {
     const r = this.renderer;
@@ -287,7 +256,7 @@ export class TuiApp {
     const thinkingStr = thinkingLevel !== "off" ? ` | thinking: ${thinkingLevel}` : "";
     return t`${bold(fg(colors.cyan)("agentik"))} ${dim("coding agent")}
 ${dim(`${this.provider}/${this.modelId}${thinkingStr}`)}
-${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking | /help commands")}`;
+${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking | PgUp/PgDn scroll | /help")}`;
   }
 
   private updateInputBorderColor(): void {
@@ -296,10 +265,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     this.inputBox.borderColor = color;
     this.inputBox.focusedBorderColor = color;
   }
-
-  // ==========================================================================
-  // Agent event wiring
-  // ==========================================================================
 
   private wireAgentEvents(): void {
     this.unsubscribe = this.agent.subscribe((event: AgentEvent) => {
@@ -335,13 +300,18 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
 
   private onMessageUpdate(ame: AssistantMessageEvent): void {
     switch (ame.type) {
-      case "start":
-        this.currentAssistant = this.addMessageBlock("assistant");
-        this.currentThinking = null;
+      case "text_start":
+        if (!this.currentAssistant) {
+          this.currentAssistant = this.addMessageBlock("assistant");
+          this.currentThinking = null;
+        }
         break;
 
       case "text_delta":
-        if (this.currentAssistant?.markdown) {
+        if (!this.currentAssistant) {
+          this.currentAssistant = this.addMessageBlock("assistant");
+        }
+        if (this.currentAssistant.markdown) {
           this.currentAssistant.markdown.content += ame.delta;
         }
         break;
@@ -363,13 +333,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
       case "thinking_end":
         this.currentThinking = null;
         this.currentThinkingText = "";
-        break;
-
-      case "toolcall_start":
-        break;
-
-      case "done":
-      case "error":
         break;
     }
   }
@@ -400,7 +363,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     const resultSummary = summarizeToolResult(result, isError);
     const resultText = resultSummary ? ` ${resultSummary}` : "";
 
-    // Update the pending tool block in-place
     if (pending?.block.text) {
       pending.block.text.content = t`${fg(statusColor)(dim(`  ${icon} ${toolName}${timeStr}`))}${dim(resultText)}`;
     } else {
@@ -410,7 +372,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
       }
     }
 
-    // Show diff for edit tool results
     if (!isError && toolName === "edit") {
       const diff = getToolDiff(result);
       if (diff) {
@@ -462,16 +423,11 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     this.textarea.focus();
   }
 
-  // ==========================================================================
-  // Input handling
-  // ==========================================================================
-
   private wireInput(): void {
     this.textarea.onSubmit = () => {
       const text = this.textarea.plainText.trim();
       if (!text) return;
 
-      // Handle slash commands
       if (text.startsWith("/")) {
         if (this.handleSlashCommand(text)) {
           this.textarea.initialValue = "";
@@ -491,15 +447,30 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     };
 
     this.renderer.keyInput.on("keypress", (key: KeyEvent) => {
-      // Ctrl+C: cancel/exit
       if (key.name === "c" && key.ctrl) {
         this.handleCtrlC();
         return;
       }
 
-      // Ctrl+T: cycle thinking level
       if (key.name === "t" && key.ctrl) {
         this.cycleThinkingLevel();
+        return;
+      }
+
+      if (key.name === "pageup") {
+        this.chatScroll.scrollBy(-10);
+        return;
+      }
+      if (key.name === "pagedown") {
+        this.chatScroll.scrollBy(10);
+        return;
+      }
+      if (key.name === "up" && key.shift) {
+        this.chatScroll.scrollBy(-3);
+        return;
+      }
+      if (key.name === "down" && key.shift) {
+        this.chatScroll.scrollBy(3);
         return;
       }
     });
@@ -523,10 +494,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     this.lastSigint = now;
     this.addStatusMessage(t`${dim("Press Ctrl+C again to exit")}`);
   }
-
-  // ==========================================================================
-  // Slash commands
-  // ==========================================================================
 
   private handleSlashCommand(text: string): boolean {
     const [cmd, ...rest] = text.split(/\s+/);
@@ -555,11 +522,7 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
 
       case "/thinking": {
         if (arg && (THINKING_LEVELS as readonly string[]).includes(arg)) {
-          this.agent.setThinkingLevel(arg as ThinkingLevel);
-          this.updateInputBorderColor();
-          this.header.content = this.buildHeaderContent();
-          this.addStatusMessage(t`${dim(`Thinking level: ${arg}`)}`);
-          this.updateFooter();
+          this.applyThinkingLevel(arg as ThinkingLevel);
         } else {
           const current = this.agent.state.thinkingLevel;
           this.addStatusMessage(
@@ -609,6 +572,8 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
       "  Shift+Enter      New line",
       "  Ctrl+C           Cancel stream / double to exit",
       "  Ctrl+T           Cycle thinking level",
+      "  PgUp/PgDn        Scroll chat history",
+      "  Shift+Up/Down    Scroll chat (small step)",
     ];
     this.addStatusMessage(t`${dim(helpLines.join("\n"))}`);
   }
@@ -626,24 +591,20 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     this.addStatusMessage(t`${dim(lines.join("\n"))}`);
   }
 
-  // ==========================================================================
-  // Thinking level
-  // ==========================================================================
+  private applyThinkingLevel(level: ThinkingLevel): void {
+    this.agent.setThinkingLevel(level);
+    this.updateInputBorderColor();
+    this.header.content = this.buildHeaderContent();
+    this.addStatusMessage(t`${dim(`Thinking level: ${level}`)}`);
+    this.updateFooter();
+  }
 
   private cycleThinkingLevel(): void {
     const current = this.agent.state.thinkingLevel;
     const idx = THINKING_LEVELS.indexOf(current);
     const next = THINKING_LEVELS[(idx + 1) % THINKING_LEVELS.length];
-    this.agent.setThinkingLevel(next);
-    this.updateInputBorderColor();
-    this.header.content = this.buildHeaderContent();
-    this.addStatusMessage(t`${dim(`Thinking level: ${next}`)}`);
-    this.updateFooter();
+    this.applyThinkingLevel(next);
   }
-
-  // ==========================================================================
-  // Message rendering
-  // ==========================================================================
 
   private addMessageBlock(type: MessageBlock["type"]): MessageBlock {
     const r = this.renderer;
@@ -728,16 +689,7 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
   }
 
   private addErrorMessage(text: string): void {
-    const r = this.renderer;
-    const container = new BoxRenderable(r, { width: "100%" });
-    const txt = new TextRenderable(r, {
-      width: "100%",
-      content: t`${fg(colors.errorFg)(`Error: ${text}`)}`,
-    });
-    container.add(txt);
-
-    this.messages.push({ type: "status", container, text: txt });
-    this.chatScroll.add(container);
+    this.addStatusMessage(t`${fg(colors.errorFg)(`Error: ${text}`)}`);
   }
 
   private clearChat(): void {
@@ -751,10 +703,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     this.totalCacheRead = 0;
     this.totalCacheWrite = 0;
   }
-
-  // ==========================================================================
-  // Footer
-  // ==========================================================================
 
   private updateFooter(status?: string): void {
     const streaming = this.agent.state.isStreaming;
@@ -779,10 +727,6 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
 
     this.footer.content = t`${dim(parts.join(" | "))}`;
   }
-
-  // ==========================================================================
-  // Cleanup
-  // ==========================================================================
 
   destroy(): void {
     this.unsubscribe?.();

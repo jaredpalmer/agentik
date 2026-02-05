@@ -1,13 +1,5 @@
-/**
- * TUI theme: color constants and SyntaxStyle for markdown/code rendering.
- */
-
 import type { ThinkingLevel } from "@agentik/agent";
 import { RGBA, SyntaxStyle } from "@opentui/core";
-
-// ============================================================================
-// Color palette
-// ============================================================================
 
 export const colors = {
   // Base
@@ -30,48 +22,27 @@ export const colors = {
   userLabel: "#7aa2f7",
   assistantLabel: "#9ece6a",
   toolLabel: "#e0af68",
-  thinkingFg: "#565f89",
   errorFg: "#f7768e",
   successFg: "#9ece6a",
-  statusFg: "#565f89",
-  warnFg: "#e0af68",
 
-  // Tool display
-  toolBorder: "#3b4261",
-  toolArgDim: "#565f89",
+  // Diff
   diffAdded: "#9ece6a",
   diffRemoved: "#f7768e",
   diffContext: "#565f89",
-
-  // Thinking level border colors
-  thinkingOff: "#3b4261",
-  thinkingMinimal: "#565f89",
-  thinkingLow: "#7dcfff",
-  thinkingMedium: "#7aa2f7",
-  thinkingHigh: "#bb9af7",
-  thinkingXhigh: "#ff9e64",
 } as const;
 
-// ============================================================================
-// Thinking level helpers
-// ============================================================================
-
 const thinkingBorderColors: Record<ThinkingLevel, string> = {
-  off: colors.thinkingOff,
-  minimal: colors.thinkingMinimal,
-  low: colors.thinkingLow,
-  medium: colors.thinkingMedium,
-  high: colors.thinkingHigh,
-  xhigh: colors.thinkingXhigh,
+  off: colors.border,
+  minimal: colors.dimFg,
+  low: colors.cyan,
+  medium: colors.blue,
+  high: colors.magenta,
+  xhigh: colors.orange,
 };
 
 export function getThinkingBorderColor(level: ThinkingLevel): string {
   return thinkingBorderColors[level];
 }
-
-// ============================================================================
-// Syntax highlighting style for markdown / code
-// ============================================================================
 
 export function createSyntaxStyle(): SyntaxStyle {
   return SyntaxStyle.fromStyles({
