@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "agentik-coding-agent-tui-refresh",
-  "last_updated": "2026-02-05 13:22:44 -0500",
+  "last_updated": "2026-02-05 13:24:27 -0500",
   "instructions": {
     "resume": [
       "Run ./init.sh first to restore context.",
@@ -122,7 +122,7 @@
     {
       "id": "F04",
       "title": "TUI: layout refactor + chrome scaffolding",
-      "status": "pending",
+      "status": "done",
       "depends_on": ["F03"],
       "files": [
         "packages/coding-agent/src/tui/tui-app.ts",

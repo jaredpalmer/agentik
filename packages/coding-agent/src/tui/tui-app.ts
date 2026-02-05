@@ -38,11 +38,14 @@ export class TuiApp {
   private renderer?: CliRenderer;
   private root?: Box;
   private scrollBox?: ScrollBoxRenderable;
+  private divider?: TextBlock;
+  private bottomPane?: Box;
   private statusBar?: Box;
   private statusText?: TruncatedText;
   private statusLoader?: Loader;
   private queuedBox?: Box;
   private queuedText?: TextBlock;
+  private footerText?: TextBlock;
   private input?: InputField;
   private messages: MessageEntry[] = [];
   private messageId = 0;
@@ -96,6 +99,8 @@ export class TuiApp {
       contentOptions: {
         flexDirection: "column",
         width: "100%",
+        paddingLeft: 1,
+        paddingRight: 1,
       },
       scrollbarOptions: {
         trackOptions: {
@@ -104,6 +109,15 @@ export class TuiApp {
         },
       },
     });
+    this.divider = new TextBlock(this.renderer, {
+      text: "",
+      width: "100%",
+    });
+    this.bottomPane = new Box(this.renderer, {
+      id: "bottom-pane",
+      width: "100%",
+      flexDirection: "column",
+    });
     this.statusBar = new Box(this.renderer, {
       id: "status",
       width: "100%",
@@ -111,6 +125,7 @@ export class TuiApp {
       flexDirection: "row",
       alignItems: "center",
       gap: 1,
+      paddingX: 1,
     });
     this.statusLoader = new Loader(this.renderer, {
       message: "",
@@ -151,10 +166,20 @@ export class TuiApp {
       backgroundColor: "transparent",
       maxLength: 4000,
     });
+    this.footerText = new TextBlock(this.renderer, {
+      text: "",
+      width: "100%",
+      fg: "#9aa0a6",
+      wrapMode: "none",
+      paddingX: 1,
+    });
+    this.bottomPane.add(this.statusBar);
+    this.bottomPane.add(this.queuedBox);
+    this.bottomPane.add(this.input);
+    this.bottomPane.add(this.footerText);
     this.root.add(this.scrollBox);
-    this.root.add(this.statusBar);
-    this.root.add(this.queuedBox);
-    this.root.add(this.input);
+    this.root.add(this.divider);
+    this.root.add(this.bottomPane);
     this.renderer.root.add(this.root);
     this.renderer.start();
     this.input.focus();
@@ -245,10 +270,13 @@ export class TuiApp {
     this.renderer = undefined;
     this.root = undefined;
     this.scrollBox = undefined;
+    this.divider = undefined;
+    this.bottomPane = undefined;
     this.statusBar = undefined;
     this.statusText = undefined;
     this.statusLoader = undefined;
     this.input = undefined;
+    this.footerText = undefined;
     this.messages = [];
     this.currentAssistantIndex = undefined;
     this.isStreaming = false;
@@ -1212,8 +1240,22 @@ export class TuiApp {
     }
   }
 
+  private updateDivider(): void {
+    if (!this.divider || !this.renderer) {
+      return;
+    }
+    const width = this.renderer.terminalWidth;
+    if (width <= 0) {
+      this.divider.setText("");
+      return;
+    }
+    const line = "─".repeat(width);
+    this.divider.setText(t`${dim(line)}`);
+  }
+
   private render(): void {
     this.trimHistory();
+    this.updateDivider();
     this.renderer?.requestRender();
   }
 }
