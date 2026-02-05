@@ -25,7 +25,7 @@ import {
   dim,
   fg,
 } from "@opentui/core";
-import type { Agent, AgentEvent, AssistantMessage, AssistantMessageEvent } from "@agentik/agent";
+import type { Agent, AgentEvent, AgentMessage, AssistantMessageEvent } from "@agentik/agent";
 import { colors, createSyntaxStyle } from "./theme.js";
 
 // ============================================================================
@@ -70,9 +70,11 @@ export class TuiApp {
   private messages: MessageBlock[] = [];
   private currentAssistant: MessageBlock | null = null;
   private currentThinking: MessageBlock | null = null;
+  private currentThinkingText = "";
   private totalTokensIn = 0;
   private totalTokensOut = 0;
   private lastSigint = 0;
+  private unsubscribe?: () => void;
 
   constructor(opts: TuiOptions) {
     this.agent = opts.agent;
@@ -197,7 +199,7 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
   // ==========================================================================
 
   private wireAgentEvents(): void {
-    this.agent.subscribe((event: AgentEvent) => {
+    this.unsubscribe = this.agent.subscribe((event: AgentEvent) => {
       switch (event.type) {
         case "agent_start":
           this.onAgentStart();
@@ -243,18 +245,19 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
 
       case "thinking_start":
         this.currentThinking = this.addMessageBlock("thinking");
+        this.currentThinkingText = "";
         break;
 
       case "thinking_delta":
         if (this.currentThinking?.text) {
-          const current = this.currentThinking.text.content;
-          const currentStr = typeof current === "string" ? current : "";
-          this.currentThinking.text.content = t`${dim(currentStr + ame.delta)}`;
+          this.currentThinkingText += ame.delta;
+          this.currentThinking.text.content = t`${dim(this.currentThinkingText)}`;
         }
         break;
 
       case "thinking_end":
         this.currentThinking = null;
+        this.currentThinkingText = "";
         break;
 
       case "toolcall_start":
@@ -267,7 +270,7 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     }
   }
 
-  private onMessageEnd(_message: unknown): void {
+  private onMessageEnd(_message: AgentMessage): void {
     this.currentAssistant = null;
     this.currentThinking = null;
   }
@@ -290,13 +293,12 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     }
   }
 
-  private onTurnEnd(message: unknown): void {
-    const msg = message as AssistantMessage;
-    if (msg.role === "assistant" && msg.usage) {
-      this.totalTokensIn += msg.usage.input;
-      this.totalTokensOut += msg.usage.output;
+  private onTurnEnd(message: AgentMessage): void {
+    if (message.role === "assistant") {
+      this.totalTokensIn += message.usage.input;
+      this.totalTokensOut += message.usage.output;
 
-      if (msg.stopReason === "aborted") {
+      if (message.stopReason === "aborted") {
         this.addStatusMessage(t`${dim("[interrupted]")}`);
       }
     }
@@ -458,7 +460,7 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
     const container = new BoxRenderable(r, { width: "100%" });
     const txt = new TextRenderable(r, {
       width: "100%",
-      content: typeof content === "string" ? content : content,
+      content,
     });
     container.add(txt);
 
@@ -506,7 +508,8 @@ ${dim("Enter to send, Shift+Enter for newline, Ctrl+C to cancel/exit")}`,
   // ==========================================================================
 
   destroy(): void {
-    this.syntaxStyle.destroy();
-    this.renderer.destroy();
+    this.unsubscribe?.();
+    this.syntaxStyle?.destroy();
+    this.renderer?.destroy();
   }
 }

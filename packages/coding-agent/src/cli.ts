@@ -17,16 +17,16 @@ import { TuiApp } from "./tui/app.js";
 
 const DEFAULT_MODEL = "claude-opus-4-6";
 
-function createModel() {
+async function createModel() {
   const provider = process.env.AGENTIK_PROVIDER ?? "anthropic";
   const modelId = process.env.AGENTIK_MODEL ?? DEFAULT_MODEL;
 
   if (provider === "anthropic") {
-    const { createAnthropic } = require("@ai-sdk/anthropic");
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
     const anthropic = createAnthropic();
     return anthropic(modelId);
   } else if (provider === "openai") {
-    const { createOpenAI } = require("@ai-sdk/openai");
+    const { createOpenAI } = await import("@ai-sdk/openai");
     const openai = createOpenAI();
     return openai(modelId);
   }
@@ -73,7 +73,7 @@ function formatError(err: unknown): string {
 async function main() {
   const provider = process.env.AGENTIK_PROVIDER ?? "anthropic";
   const modelId = process.env.AGENTIK_MODEL ?? DEFAULT_MODEL;
-  const model = createModel();
+  const model = await createModel();
 
   const agent = new Agent({
     initialState: {
