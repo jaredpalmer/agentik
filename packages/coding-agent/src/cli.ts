@@ -15,9 +15,11 @@ import { contextInfo } from "./extensions/context-info.js";
 // Model Setup
 // ============================================================================
 
+const DEFAULT_MODEL = "claude-opus-4-6";
+
 function createModel() {
   const provider = process.env.AGENTIK_PROVIDER ?? "anthropic";
-  const modelId = process.env.AGENTIK_MODEL ?? "claude-sonnet-4-20250514";
+  const modelId = process.env.AGENTIK_MODEL ?? DEFAULT_MODEL;
 
   if (provider === "anthropic") {
     const { createAnthropic } = require("@ai-sdk/anthropic");
@@ -30,6 +32,43 @@ function createModel() {
   }
 
   throw new Error(`Unsupported provider: ${provider}. Use AGENTIK_PROVIDER=anthropic|openai`);
+}
+
+// ============================================================================
+// Error formatting
+// ============================================================================
+
+function formatError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+
+  // API key missing
+  if (err.message.includes("API key is missing")) {
+    const match = err.message.match(/(\w+_API_KEY)/);
+    const envVar = match?.[1] ?? "API_KEY";
+    return `Missing API key. Set the ${envVar} environment variable.`;
+  }
+
+  // Network / connection errors
+  if (err.message.includes("ECONNREFUSED") || err.message.includes("fetch failed")) {
+    return "Connection failed. Check your network and try again.";
+  }
+
+  // Rate limit
+  if (err.message.includes("rate limit") || err.message.includes("429")) {
+    return "Rate limited. Wait a moment and try again.";
+  }
+
+  // Auth errors
+  if (err.message.includes("401") || err.message.includes("invalid_api_key")) {
+    return "Invalid API key. Check your credentials.";
+  }
+
+  // Overloaded
+  if (err.message.includes("overloaded") || err.message.includes("529")) {
+    return "API is overloaded. Try again in a moment.";
+  }
+
+  return err.message;
 }
 
 // ============================================================================
@@ -79,9 +118,15 @@ function formatEvent(event: AgentEvent): void {
       if (msg.role === "assistant") {
         const assistant = msg;
         const u = assistant.usage;
-        process.stdout.write(
-          `\n${DIM}[tokens: ${u.input}in/${u.output}out | stop: ${assistant.stopReason}]${RESET}\n`
-        );
+        if (assistant.stopReason === "aborted") {
+          process.stdout.write(`\n${DIM}[interrupted]${RESET}\n`);
+        } else if (assistant.stopReason === "error") {
+          // Error already printed elsewhere
+        } else {
+          process.stdout.write(
+            `\n${DIM}[tokens: ${u.input}in/${u.output}out | stop: ${assistant.stopReason}]${RESET}\n`
+          );
+        }
       }
       break;
     }
@@ -89,6 +134,8 @@ function formatEvent(event: AgentEvent): void {
 }
 
 async function main() {
+  const provider = process.env.AGENTIK_PROVIDER ?? "anthropic";
+  const modelId = process.env.AGENTIK_MODEL ?? DEFAULT_MODEL;
   const model = createModel();
 
   const agent = new Agent({
@@ -114,40 +161,65 @@ Current working directory: ${process.cwd()}`,
     output: process.stdout,
   });
 
-  console.log(`${BOLD}${CYAN}agentik${RESET} - coding agent`);
-  console.log(
-    `${DIM}Model: ${process.env.AGENTIK_PROVIDER ?? "anthropic"}/${process.env.AGENTIK_MODEL ?? "claude-sonnet-4-20250514"}${RESET}`
-  );
-  console.log(`${DIM}Tools: ${codingTools.map((t) => t.name).join(", ")}${RESET}`);
-  console.log(`${DIM}Type /quit to exit${RESET}\n`);
+  // --- Ctrl+C handling ---
+  let lastSigint = 0;
 
-  const prompt = () => {
+  process.on("SIGINT", () => {
+    const now = Date.now();
+
+    if (agent.state.isStreaming) {
+      // First Ctrl+C while streaming: abort the current response
+      agent.abort();
+      process.stdout.write(`\n${DIM}[cancelled]${RESET}\n`);
+      lastSigint = now;
+      return;
+    }
+
+    // Not streaming: double Ctrl+C within 2s exits
+    if (now - lastSigint < 2000) {
+      process.stdout.write(`\n${DIM}Goodbye!${RESET}\n`);
+      rl.close();
+      process.exit(0);
+    }
+
+    lastSigint = now;
+    process.stdout.write(`\n${DIM}Press Ctrl+C again to exit${RESET}\n`);
+    showPrompt();
+  });
+
+  // --- Banner ---
+  console.log(`${BOLD}${CYAN}agentik${RESET} - coding agent`);
+  console.log(`${DIM}Model: ${provider}/${modelId}${RESET}`);
+  console.log(`${DIM}Tools: ${codingTools.map((t) => t.name).join(", ")}${RESET}`);
+  console.log(`${DIM}Ctrl+C to cancel, twice to exit, /quit to exit${RESET}\n`);
+
+  const showPrompt = () => {
     // eslint-disable-next-line typescript-eslint/no-misused-promises
     rl.question(`${BOLD}> ${RESET}`, async (input) => {
       const trimmed = input.trim();
 
       if (!trimmed) {
-        prompt();
+        showPrompt();
         return;
       }
 
       if (trimmed === "/quit" || trimmed === "/exit") {
-        console.log("Goodbye!");
+        console.log(`${DIM}Goodbye!${RESET}`);
         rl.close();
         process.exit(0);
       }
 
       if (trimmed === "/clear") {
         agent.clearMessages();
-        console.log("Conversation cleared.");
-        prompt();
+        console.log(`${DIM}Conversation cleared.${RESET}`);
+        showPrompt();
         return;
       }
 
       if (trimmed === "/reset") {
         agent.reset();
-        console.log("Agent reset.");
-        prompt();
+        console.log(`${DIM}Agent reset.${RESET}`);
+        showPrompt();
         return;
       }
 
@@ -156,17 +228,17 @@ Current working directory: ${process.cwd()}`,
         await agent.prompt(trimmed);
         process.stdout.write("\n");
       } catch (err) {
-        console.error(`${RED}Error: ${(err as Error).message}${RESET}`);
+        process.stdout.write(`\n${RED}Error: ${formatError(err)}${RESET}\n\n`);
       }
 
-      prompt();
+      showPrompt();
     });
   };
 
-  prompt();
+  showPrompt();
 }
 
 main().catch((err) => {
-  console.error("Fatal error:", err);
+  console.error(`${RED}Error: ${formatError(err)}${RESET}`);
   process.exit(1);
 });
