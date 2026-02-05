@@ -1,4 +1,4 @@
-import { dim, fg, stringToStyledText, t, StyledText, type TextChunk } from "@opentui/core";
+import { bold, dim, fg, stringToStyledText, t, StyledText, type TextChunk } from "@opentui/core";
 import { colors } from "./theme";
 
 export type ToolCallStatus = "running" | "done" | "error";
@@ -13,12 +13,12 @@ export type ToolCallFormatOptions = {
 const TOOL_OUTPUT_MAX_LINES = 5;
 const TOOL_DETAIL_PREFIX = "  └ ";
 const TOOL_DETAIL_INDENT = "    ";
+const EXPLORATION_TOOLS = new Set(["read", "list", "glob"]);
+const ACTION_VERBS = new Set(["Read", "List", "Search", "Run", "Fetch", "Write", "Edit", "Update"]);
 
 export function formatToolContent(options: ToolCallFormatOptions): string {
   const lines: string[] = [];
-  const statusLabel = options.status === "error" ? "error" : options.status;
-  const indicator = options.status === "running" ? "⠋" : "●";
-  lines.push(`${indicator} ${options.toolName} (${statusLabel})`);
+  lines.push(formatToolHeaderLabel(options.toolName, options.status));
   lines.push(...summarizeToolArgs(options.toolName, options.args));
   lines.push(
     ...summarizeToolOutput(options.toolName, options.output, options.status, options.args)
@@ -38,19 +38,88 @@ export function formatToolStyledText(content: string): StyledText {
   ]);
 }
 
+function formatToolHeaderLabel(toolName: string, status: ToolCallStatus): string {
+  if (EXPLORATION_TOOLS.has(toolName)) {
+    if (status === "running") {
+      return "• Exploring";
+    }
+    if (status === "error") {
+      return "• Exploration failed";
+    }
+    return "• Explored";
+  }
+  if (toolName === "bash") {
+    if (status === "running") {
+      return "• Running";
+    }
+    if (status === "error") {
+      return "• Failed";
+    }
+    return "• Ran";
+  }
+  if (toolName === "webfetch") {
+    if (status === "running") {
+      return "• Fetching";
+    }
+    if (status === "error") {
+      return "• Fetch failed";
+    }
+    return "• Fetched";
+  }
+  if (toolName === "write") {
+    if (status === "running") {
+      return "• Writing";
+    }
+    if (status === "error") {
+      return "• Write failed";
+    }
+    return "• Wrote";
+  }
+  if (toolName === "edit") {
+    if (status === "running") {
+      return "• Editing";
+    }
+    if (status === "error") {
+      return "• Edit failed";
+    }
+    return "• Edited";
+  }
+  if (toolName === "update") {
+    if (status === "running") {
+      return "• Updating";
+    }
+    if (status === "error") {
+      return "• Update failed";
+    }
+    return "• Updated";
+  }
+  const label = formatToolName(toolName);
+  if (status === "running") {
+    return `• ${label}`;
+  }
+  if (status === "error") {
+    return `• ${label} failed`;
+  }
+  return `• ${label}`;
+}
+
+function formatToolName(toolName: string): string {
+  const normalized = toolName.replace(/[_-]+/g, " ");
+  return normalized.length > 0
+    ? `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1)}`
+    : toolName;
+}
+
 function formatToolHeader(header: string): StyledText {
-  const match = header.match(/^(\S)\s+(.+)\s+\((running|done|error)\)$/);
+  const match = header.match(/^•\s+(.+)$/);
   if (!match) {
     return t`${fg(colors.accent)(header)}`;
   }
-  const [, indicator, toolName, status] = match;
-  const statusColor =
-    status === "running" ? colors.accent : status === "error" ? colors.error : colors.success;
-  return new StyledText([
-    ...t`${fg(statusColor)(indicator)} `.chunks,
-    ...t`${fg(colors.accent)(toolName)} `.chunks,
-    ...t`${fg(colors.muted)(`(${status})`)}`.chunks,
-  ]);
+  const title = match[1];
+  const lowered = title.toLowerCase();
+  const color = lowered.includes("failed") || lowered.includes("error") ? colors.error : undefined;
+  const titleChunk = color ? fg(color)(bold(title)) : bold(title);
+  return new StyledText([...t`${dim("•")} `.chunks, titleChunk]);
 }
 
 function formatToolBody(lines: string[]): StyledText {
@@ -66,11 +135,19 @@ function formatToolBody(lines: string[]): StyledText {
         const label = tail.slice(0, colonIndex);
         const value = tail.slice(colonIndex + 1);
         const valueWithSpace = value.startsWith(" ") ? value : ` ${value}`;
-        const styled = t`${dim(TOOL_DETAIL_PREFIX)}${fg(colors.muted)(label)}:${valueWithSpace}`;
+        const labelColor = label === "error" ? colors.error : colors.muted;
+        const styled = t`${dim(TOOL_DETAIL_PREFIX)}${fg(labelColor)(label)}:${valueWithSpace}`;
         chunks.push(...styled.chunks);
       } else {
-        const styled = t`${dim(TOOL_DETAIL_PREFIX)}${tail}`;
-        chunks.push(...styled.chunks);
+        const verbMatch = tail.match(/^([A-Za-z]+)\b(.*)$/);
+        if (verbMatch && ACTION_VERBS.has(verbMatch[1])) {
+          const [, verb, rest] = verbMatch;
+          const styled = t`${dim(TOOL_DETAIL_PREFIX)}${fg(colors.accent)(verb)}${rest}`;
+          chunks.push(...styled.chunks);
+        } else {
+          const styled = t`${dim(TOOL_DETAIL_PREFIX)}${tail}`;
+          chunks.push(...styled.chunks);
+        }
       }
       return;
     }
@@ -116,46 +193,57 @@ function formatValue(value: unknown): string {
 }
 
 function summarizeToolArgs(toolName: string, args: unknown): string[] {
+  const lines: string[] = [];
   if (!args || typeof args !== "object") {
-    return [];
+    return lines;
   }
   const record = args as Record<string, unknown>;
-  const lines: string[] = [];
   const push = (label: string, value: unknown) => {
     if (value === undefined || value === null || value === "") {
       return;
     }
     lines.push(`${TOOL_DETAIL_PREFIX}${label}: ${formatValue(value)}`);
   };
+  const pushAction = (verb: string, value: unknown) => {
+    if (value === undefined || value === null || value === "") {
+      lines.push(`${TOOL_DETAIL_PREFIX}${verb}`);
+      return;
+    }
+    lines.push(`${TOOL_DETAIL_PREFIX}${verb} ${formatValue(value)}`);
+  };
 
   switch (toolName) {
     case "read":
-    case "write":
-    case "edit":
-    case "update":
-      push("path", record.path);
+      pushAction("Read", record.path);
       break;
     case "list":
-      push("path", record.path ?? ".");
-      if (record.limit != null) {
-        push("limit", record.limit);
-      }
+      pushAction("List", record.path ?? ".");
       break;
     case "glob":
-      push("pattern", record.pattern);
-      push("path", record.path ?? ".");
-      if (record.limit != null) {
-        push("limit", record.limit);
+      if (record.pattern && record.path) {
+        lines.push(
+          `${TOOL_DETAIL_PREFIX}Search ${formatValue(record.pattern)} in ${formatValue(record.path)}`
+        );
+      } else if (record.pattern) {
+        pushAction("Search", record.pattern);
+      } else {
+        pushAction("Search", record.path ?? ".");
       }
       break;
     case "bash":
-      push("command", record.command);
+      pushAction("Run", record.command);
       break;
     case "webfetch":
-      push("url", record.url);
-      if (record.method && record.method !== "GET") {
-        push("method", record.method);
-      }
+      pushAction("Fetch", record.url);
+      break;
+    case "write":
+      pushAction("Write", record.path);
+      break;
+    case "edit":
+      pushAction("Edit", record.path);
+      break;
+    case "update":
+      pushAction("Update", record.path);
       break;
     default:
       push("args", args);
@@ -169,7 +257,7 @@ function summarizeToolOutput(
   toolName: string,
   output: unknown,
   status: ToolCallStatus,
-  args?: unknown
+  _args?: unknown
 ): string[] {
   if (status === "error") {
     if (output == null) {
@@ -180,30 +268,13 @@ function summarizeToolOutput(
 
   switch (toolName) {
     case "read": {
-      if (typeof output !== "string") {
-        return output === undefined ? [] : [`  - result: ${formatValue(output)}`];
-      }
-      const { linesShown, rangeLabel } = summarizeReadOutput(output, args);
-      const lines: string[] = [];
-      if (rangeLabel) {
-        lines.push(`${TOOL_DETAIL_PREFIX}range: ${rangeLabel}`);
-      }
-      lines.push(`${TOOL_DETAIL_PREFIX}result: ${linesShown} line${linesShown === 1 ? "" : "s"}`);
-      return lines;
+      return [];
     }
     case "list": {
-      if (typeof output !== "string") {
-        return output === undefined ? [] : [`${TOOL_DETAIL_PREFIX}result: ${formatValue(output)}`];
-      }
-      const count = countPrimaryLines(output);
-      return [`${TOOL_DETAIL_PREFIX}entries: ${count}`];
+      return [];
     }
     case "glob": {
-      if (typeof output !== "string") {
-        return output === undefined ? [] : [`${TOOL_DETAIL_PREFIX}result: ${formatValue(output)}`];
-      }
-      const count = countPrimaryLines(output);
-      return [`${TOOL_DETAIL_PREFIX}matches: ${count}`];
+      return [];
     }
     case "webfetch": {
       if (typeof output !== "string") {
@@ -265,53 +336,6 @@ function summarizeToolOutput(
       return lines;
     }
   }
-}
-
-function summarizeReadOutput(
-  output: string,
-  args?: unknown
-): { linesShown: number; rangeLabel?: string } {
-  const { body } = splitOutputBody(output);
-  const linesShown = body.length > 0 ? body.split("\n").length : 0;
-  const rangeFromOutput = parseRangeFromReadOutput(output);
-  if (rangeFromOutput) {
-    return { linesShown, rangeLabel: rangeFromOutput };
-  }
-
-  if (args && typeof args === "object") {
-    const record = args as Record<string, unknown>;
-    const offset = typeof record.offset === "number" ? record.offset : undefined;
-    if (offset !== undefined && linesShown > 0) {
-      const end = offset + linesShown - 1;
-      return { linesShown, rangeLabel: `${offset}-${end}` };
-    }
-  }
-
-  return { linesShown };
-}
-
-function parseRangeFromReadOutput(output: string): string | undefined {
-  const match = output.match(/Showing lines (\d+)-(\d+) of (\d+)/);
-  if (!match) {
-    return undefined;
-  }
-  return `${match[1]}-${match[2]} of ${match[3]}`;
-}
-
-function countPrimaryLines(output: string): number {
-  const { body } = splitOutputBody(output);
-  if (!body.trim()) {
-    return 0;
-  }
-  return body.split("\n").filter((line) => line.trim().length > 0).length;
-}
-
-function splitOutputBody(output: string): { body: string; meta?: string } {
-  const metaIndex = output.indexOf("\n\n[");
-  if (metaIndex === -1) {
-    return { body: output };
-  }
-  return { body: output.slice(0, metaIndex), meta: output.slice(metaIndex + 2) };
 }
 
 function extractWebFetchSummary(output: string): { statusLine?: string; contentType?: string } {

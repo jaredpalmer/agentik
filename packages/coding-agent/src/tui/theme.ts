@@ -5,4 +5,5 @@ export const colors = {
   codex: "magenta",
   muted: "brightBlack",
   dim: "brightBlack",
+  border: "brightBlack",
 };

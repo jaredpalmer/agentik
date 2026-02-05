@@ -1,18 +1,20 @@
 import {
   ScrollBoxRenderable,
   StyledText,
+  bold,
   createCliRenderer,
   CliRenderEvents,
   dim,
   fg,
+  stringToStyledText,
   t,
   type KeyBinding,
+  type TextChunk,
   type CliRenderer,
 } from "@opentui/core";
 import type { Agent, AgentEvent, AgentMessage } from "@agentik/runtime";
 import {
   Box,
-  Loader,
   MarkdownBlock,
   TextBlock,
   TextareaField,
@@ -48,13 +50,17 @@ export class TuiApp {
   private root?: Box;
   private scrollBox?: ScrollBoxRenderable;
   private divider?: TextBlock;
+  private headerBox?: Box;
+  private headerText?: TextBlock;
   private bottomPane?: Box;
   private statusBar?: Box;
   private statusText?: TruncatedText;
-  private statusLoader?: Loader;
   private queuedBox?: Box;
   private queuedText?: TextBlock;
   private footerText?: TextBlock;
+  private composerBox?: Box;
+  private composerRow?: Box;
+  private composerPrefix?: TextBlock;
   private input?: TextareaField;
   private messages: MessageEntry[] = [];
   private messageId = 0;
@@ -68,6 +74,9 @@ export class TuiApp {
   private subagentToolCallIds = new Set<string>();
   private maxHistoryLines = 2000;
   private isStopped = false;
+  private statusMessage = "Ready";
+  private statusStartedAt?: number;
+  private statusTimer?: ReturnType<typeof setInterval>;
   private queuedMessages: Array<{ mode: "steering" | "follow-up"; content: string }> = [];
   private handleRendererDestroy = () => {
     if (this.isStopped) {
@@ -115,11 +124,27 @@ export class TuiApp {
       },
       scrollbarOptions: {
         trackOptions: {
-          foregroundColor: "#3b4252",
-          backgroundColor: "#1f2328",
+          foregroundColor: colors.dim,
+          backgroundColor: "transparent",
         },
       },
     });
+    this.headerBox = new Box(this.renderer, {
+      id: "session-header",
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.border,
+      paddingX: 1,
+      paddingY: 0,
+      marginBottom: 1,
+    });
+    this.headerText = new TextBlock(this.renderer, {
+      text: "",
+      width: "100%",
+      wrapMode: "word",
+    });
+    this.headerBox.add(this.headerText);
+    this.scrollBox.add(this.headerBox);
     this.divider = new TextBlock(this.renderer, {
       text: "",
       width: "100%",
@@ -138,20 +163,10 @@ export class TuiApp {
       gap: 1,
       paddingX: 1,
     });
-    this.statusLoader = new Loader(this.renderer, {
-      message: "",
-      frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-      frameColor: colors.accent,
-      messageColor: colors.muted,
-    });
-    this.statusLoader.stop();
-    this.statusLoader.view.visible = false;
-    this.statusLoader.view.content = "";
     this.statusText = new TruncatedText(this.renderer, {
       text: TuiApp.queueHintText,
       flexGrow: 1,
     });
-    this.statusBar.add(this.statusLoader.view);
     this.statusBar.add(this.statusText);
     this.queuedBox = new Box(this.renderer, {
       id: "queued",
@@ -173,13 +188,37 @@ export class TuiApp {
       { name: "return", shift: true, action: "newline" },
       { name: "linefeed", shift: true, action: "newline" },
     ];
+    this.composerBox = new Box(this.renderer, {
+      id: "composer-box",
+      width: "100%",
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.border,
+      focusedBorderColor: colors.accent,
+      paddingX: 1,
+      paddingY: 0,
+      marginTop: 1,
+    });
+    this.composerRow = new Box(this.renderer, {
+      id: "composer-row",
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 1,
+    });
+    this.composerPrefix = new TextBlock(this.renderer, {
+      text: t`${dim("›")}`,
+      width: 2,
+    });
     this.input = new TextareaField(this.renderer, {
       id: "input",
       width: "100%",
       height: this.inputHeight,
-      placeholder: "Type a message. Shift+Enter for newline...",
+      flexGrow: 1,
+      placeholder: "Ask Agentik to do anything",
       backgroundColor: "transparent",
-      placeholderColor: "brightBlack",
+      focusedBackgroundColor: "transparent",
+      placeholderColor: colors.muted,
       wrapMode: "word",
       keyBindings: composerBindings,
       onSubmitText: (value) => {
@@ -194,9 +233,12 @@ export class TuiApp {
       wrapMode: "none",
       paddingX: 1,
     });
+    this.composerRow.add(this.composerPrefix);
+    this.composerRow.add(this.input);
+    this.composerBox.add(this.composerRow);
     this.bottomPane.add(this.statusBar);
     this.bottomPane.add(this.queuedBox);
-    this.bottomPane.add(this.input);
+    this.bottomPane.add(this.composerBox);
     this.bottomPane.add(this.footerText);
     this.root.add(this.scrollBox);
     this.root.add(this.divider);
@@ -206,6 +248,7 @@ export class TuiApp {
     this.input.focus();
     this.setStatus("Ready");
     this.updateInputHeight();
+    this.updateSessionHeader();
     this.renderer.on("resize", () => this.render());
     this.renderer.keyInput.on("keypress", (key) => {
       if (key.name === "c" && key.ctrl) {
@@ -281,7 +324,10 @@ export class TuiApp {
     this.abortController = undefined;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
-    this.statusLoader?.destroy();
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = undefined;
+    }
     if (this.renderer) {
       this.renderer.off(CliRenderEvents.DESTROY, this.handleRendererDestroy);
       if (options.destroyRenderer) {
@@ -292,11 +338,15 @@ export class TuiApp {
     this.root = undefined;
     this.scrollBox = undefined;
     this.divider = undefined;
+    this.headerBox = undefined;
+    this.headerText = undefined;
     this.bottomPane = undefined;
     this.statusBar = undefined;
     this.statusText = undefined;
-    this.statusLoader = undefined;
     this.input = undefined;
+    this.composerBox = undefined;
+    this.composerRow = undefined;
+    this.composerPrefix = undefined;
     this.footerText = undefined;
     this.messages = [];
     this.currentAssistantIndex = undefined;
@@ -341,8 +391,10 @@ export class TuiApp {
 
   private submitPrompt(prompt: string): void {
     this.isStreaming = true;
+    this.statusStartedAt = Date.now();
+    this.startStatusTimer();
     this.clearExitHint();
-    this.setStatus("Thinking...");
+    this.setStatus("Working");
     this.abortController?.abort();
     this.abortController = new AbortController();
     void this.agent.prompt(prompt, { abortSignal: this.abortController.signal }).catch((error) => {
@@ -420,25 +472,31 @@ export class TuiApp {
     switch (event.type) {
       case "agent_start": {
         this.isStreaming = true;
+        this.statusStartedAt = Date.now();
+        this.startStatusTimer();
         this.clearExitHint();
-        this.setStatus("Thinking...");
+        this.setStatus("Working");
         break;
       }
       case "agent_end": {
         this.isStreaming = false;
         this.isAborting = false;
         this.abortController = undefined;
+        this.statusStartedAt = undefined;
+        this.stopStatusTimer();
         this.setStatus("Ready");
         break;
       }
       case "turn_start": {
         this.isStreaming = true;
+        this.statusStartedAt ??= Date.now();
+        this.startStatusTimer();
         this.clearExitHint();
-        this.setStatus("Thinking...");
+        this.setStatus("Working");
         break;
       }
       case "turn_end": {
-        this.setStatus(this.isStreaming ? "Thinking..." : "Ready");
+        this.setStatus(this.isStreaming ? "Working" : "Ready");
         break;
       }
       case "message_start": {
@@ -508,7 +566,7 @@ export class TuiApp {
           toolName: event.toolName,
           args: event.args,
         });
-        this.setStatus(`Tool: ${event.toolName}`);
+        this.setStatus(this.formatToolStatus(event.toolName, event.args, "running"));
         this.render();
         break;
       }
@@ -540,7 +598,7 @@ export class TuiApp {
         });
         this.toolCallEntries.delete(event.toolCallId);
         if (this.isStreaming) {
-          this.setStatus("Thinking...");
+          this.setStatus("Working");
         } else {
           this.setStatus("Ready");
         }
@@ -608,7 +666,7 @@ export class TuiApp {
         if (event.isError) {
           this.setStatus(`Subagent ${event.subagentId} error`);
         } else if (this.isStreaming) {
-          this.setStatus("Thinking...");
+          this.setStatus("Working");
         } else {
           this.setStatus("Ready");
         }
@@ -620,11 +678,15 @@ export class TuiApp {
           this.isAborting = false;
           this.abortController = undefined;
           this.isStreaming = false;
+          this.statusStartedAt = undefined;
+          this.stopStatusTimer();
           this.setStatus("Ready");
           this.render();
           break;
         }
         this.isStreaming = false;
+        this.statusStartedAt = undefined;
+        this.stopStatusTimer();
         const message = this.formatError(event.error);
         const entry = this.createMessageEntry({ role: "error", content: message });
         this.messages.push(entry);
@@ -641,6 +703,7 @@ export class TuiApp {
 
   private createMessageEntry(message: DisplayMessage): MessageEntry {
     const kind = this.kindForRole(message.role);
+    const showLabel = this.shouldShowLabel(message.role);
     const entry: MessageEntry = {
       id: `message-${this.messageId++}`,
       role: message.role,
@@ -659,28 +722,32 @@ export class TuiApp {
       marginBottom: 1,
     });
 
-    const label = new TruncatedText(this.renderer, {
-      width: "100%",
-      text: this.formatRoleLabel(message.role),
-    });
+    const label = showLabel
+      ? new TruncatedText(this.renderer, {
+          width: "100%",
+          text: this.formatRoleLabel(message.role),
+        })
+      : undefined;
 
     let body: TextBlock | MarkdownBlock;
     if (kind === "markdown") {
       body = new MarkdownBlock(this.renderer, {
         content: "",
-        paddingX: 1,
+        paddingX: showLabel ? 1 : 0,
         paddingY: 0,
         streaming: message.role === "assistant",
       });
     } else {
       body = new TextBlock(this.renderer, {
         text: "",
-        paddingX: 1,
+        paddingX: showLabel ? 1 : 0,
         paddingY: 0,
       });
     }
 
-    container.add(label);
+    if (label) {
+      container.add(label);
+    }
     container.add(body);
     this.scrollBox.add(container);
 
@@ -753,12 +820,19 @@ export class TuiApp {
     return "text";
   }
 
+  private shouldShowLabel(role: string): boolean {
+    if (role === "tool" || role.startsWith("subagent:")) {
+      return false;
+    }
+    return true;
+  }
+
   private formatTextBody(role: string, content: string): string | StyledText {
     if (role === "tool") {
       return formatToolStyledText(content);
     }
     if (role === "error") {
-      return t`${fg("#cc6666")(content)}`;
+      return t`${fg(colors.error)(content)}`;
     }
     return content;
   }
@@ -815,6 +889,41 @@ export class TuiApp {
     return value;
   }
 
+  private formatToolStatus(
+    toolName: string,
+    args: unknown,
+    status: "running" | "done" | "error"
+  ): string {
+    const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+    const path = typeof record.path === "string" ? record.path : undefined;
+    const pattern = typeof record.pattern === "string" ? record.pattern : undefined;
+    const command = typeof record.command === "string" ? record.command : undefined;
+    const url = typeof record.url === "string" ? record.url : undefined;
+
+    if (toolName === "read" || toolName === "list") {
+      return `Exploring ${path ?? "."}`;
+    }
+    if (toolName === "glob") {
+      if (pattern && path) {
+        return `Searching ${pattern} in ${path}`;
+      }
+      if (pattern) {
+        return `Searching ${pattern}`;
+      }
+      return `Searching ${path ?? "."}`;
+    }
+    if (toolName === "bash") {
+      return command ? `Running ${command}` : "Running command";
+    }
+    if (toolName === "webfetch") {
+      return url ? `Fetching ${url}` : "Fetching URL";
+    }
+    if (status === "error") {
+      return `Error running ${toolName}`;
+    }
+    return "Working";
+  }
+
   private formatRoleLabel(role: string): StyledText {
     const color = this.colorForRole(role);
     return t`${dim("[")}${fg(color)(role)}${dim("]")}`;
@@ -826,15 +935,15 @@ export class TuiApp {
     }
     switch (role) {
       case "assistant":
-        return "#9ecbff";
+        return "white";
       case "user":
-        return "#a3d9a5";
+        return colors.accent;
       case "tool":
-        return "#7aa2b8";
+        return colors.muted;
       case "error":
-        return "#cc6666";
+        return colors.error;
       default:
-        return "#b0b0b0";
+        return colors.muted;
     }
   }
 
@@ -936,15 +1045,75 @@ export class TuiApp {
     }
   }
 
+  private updateSessionHeader(): void {
+    if (!this.headerBox || !this.headerText || !this.renderer) {
+      return;
+    }
+    const width = Math.max(20, Math.min(60, this.renderer.terminalWidth - 2));
+    this.headerBox.width = width;
+    this.headerText.setText(this.buildSessionHeaderText());
+  }
+
+  private buildSessionHeaderText(): StyledText {
+    const version = this.getVersionLabel();
+    const modelLabel = this.getModelLabel();
+    const thinking = this.agent.state.thinkingLevel;
+    const modelLine = thinking ? `${modelLabel} ${thinking}` : modelLabel;
+    const directory = this.formatDirectory(process.cwd());
+
+    const title = t`${dim(">_ ")}${bold("Agentik")}${dim(` (${version})`)}`;
+    const modelRow = t`${dim("model: ")}${fg(colors.accent)(
+      modelLine
+    )}${dim("   ")}${fg(colors.accent)("/model")}${dim(" to change")}`;
+    const dirRow = t`${dim("directory: ")}${directory}`;
+
+    return this.joinStyledLines([title, stringToStyledText(""), modelRow, dirRow]);
+  }
+
+  private joinStyledLines(lines: StyledText[]): StyledText {
+    const chunks: TextChunk[] = [];
+    lines.forEach((line, index) => {
+      chunks.push(...line.chunks);
+      if (index < lines.length - 1) {
+        chunks.push(...stringToStyledText("\n").chunks);
+      }
+    });
+    return new StyledText(chunks);
+  }
+
+  private getModelLabel(): string {
+    const model = this.agent.state.model;
+    if (typeof model === "string") {
+      return model;
+    }
+    if (model && typeof model === "object") {
+      const record = model as { modelId?: string; id?: string };
+      if (record.modelId) {
+        return record.modelId;
+      }
+      if (record.id) {
+        return record.id;
+      }
+    }
+    return "unknown";
+  }
+
+  private getVersionLabel(): string {
+    return process.env.AGENTIK_VERSION ?? "dev";
+  }
+
+  private formatDirectory(value: string): string {
+    const home = process.env.HOME;
+    if (home && value.startsWith(home)) {
+      return `~${value.slice(home.length)}`;
+    }
+    return value;
+  }
+
   private setStatus(text: string): void {
     const nextText = this.exitHintActive && text === "Ready" ? TuiApp.exitHintText : text;
-    const displayText = nextText === "Ready" ? TuiApp.queueHintText : nextText;
-    if (this.statusText) {
-      this.statusText.setText(buildStatusText(displayText));
-    }
-    this.updateStatusIndicator();
-    this.updateFooter();
-    this.renderer?.requestRender();
+    this.statusMessage = nextText;
+    this.updateStatusText();
   }
 
   private setExitHint(): void {
@@ -973,6 +1142,63 @@ export class TuiApp {
     }
   }
 
+  private formatElapsed(elapsedMs: number): string {
+    const seconds = Math.max(0, Math.floor(elapsedMs / 1000));
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return `${minutes}m ${remainder.toString().padStart(2, "0")}s`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainder = seconds % 60;
+    return `${hours}h ${minutes.toString().padStart(2, "0")}m ${remainder
+      .toString()
+      .padStart(2, "0")}s`;
+  }
+
+  private updateStatusText(): void {
+    if (!this.statusText) {
+      return;
+    }
+    const elapsed =
+      this.isStreaming && this.statusStartedAt
+        ? this.formatElapsed(Date.now() - this.statusStartedAt)
+        : undefined;
+    this.statusText.setText(
+      buildStatusText({
+        header: this.statusMessage,
+        elapsed,
+        showInterruptHint: this.isStreaming,
+      })
+    );
+    this.updateFooter();
+    this.renderer?.requestRender();
+  }
+
+  private startStatusTimer(): void {
+    if (this.statusTimer) {
+      return;
+    }
+    this.statusTimer = setInterval(() => {
+      if (!this.isStreaming) {
+        return;
+      }
+      this.updateStatusText();
+    }, 1000);
+  }
+
+  private stopStatusTimer(): void {
+    if (!this.statusTimer) {
+      return;
+    }
+    clearInterval(this.statusTimer);
+    this.statusTimer = undefined;
+  }
+
   private handleCtrlC(): void {
     const now = Date.now();
     if (this.lastCtrlCAt && now - this.lastCtrlCAt <= 2000) {
@@ -994,6 +1220,8 @@ export class TuiApp {
     this.abortController?.abort();
     this.abortController = undefined;
     this.isStreaming = false;
+    this.statusStartedAt = undefined;
+    this.stopStatusTimer();
     this.currentAssistantIndex = undefined;
     const entry = this.createMessageEntry({
       role: "system",
@@ -1018,20 +1246,6 @@ export class TuiApp {
     return false;
   }
 
-  private updateStatusIndicator(): void {
-    if (!this.statusLoader) {
-      return;
-    }
-    if (this.isStreaming) {
-      this.statusLoader.view.visible = true;
-      this.statusLoader.start();
-    } else {
-      this.statusLoader.view.visible = false;
-      this.statusLoader.stop();
-      this.statusLoader.view.content = "";
-    }
-  }
-
   private updateInputHeight(): void {
     if (!this.input) {
       return;
@@ -1043,6 +1257,12 @@ export class TuiApp {
     }
     this.inputHeight = nextHeight;
     this.input.height = nextHeight;
+    if (this.composerRow) {
+      this.composerRow.height = nextHeight;
+    }
+    if (this.composerBox) {
+      this.composerBox.height = nextHeight + 2;
+    }
     this.render();
   }
 
@@ -1073,6 +1293,7 @@ export class TuiApp {
   private render(): void {
     this.trimHistory();
     this.updateDivider();
+    this.updateSessionHeader();
     this.updateFooter();
     this.renderer?.requestRender();
   }

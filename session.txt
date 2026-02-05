@@ -82,6 +82,11 @@ f2db0cc Add GH Actions
 - Updated features.json status and timestamp.
 - Validation: manual subagent TUI run not performed yet.
 
+2026-02-05 14:06:31 -0500
+- Completed F10: added Codex-style session header, styled composer box, updated status/footer hints, and revised tool-call formatting/colors.
+- Updated features.json status and timestamp.
+- Validation: `bun run build` (tsc). Manual TUI run not performed yet.
+
 2026-02-05 13:35:42 -0500
 - Ran init.sh to restore context.
 - Git status: ## main...origin/main [ahead 9]

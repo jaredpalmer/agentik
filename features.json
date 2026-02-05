@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "agentik-coding-agent-tui-refresh",
-  "last_updated": "2026-02-05 13:42:46 -0500",
+  "last_updated": "2026-02-05 14:06:31 -0500",
   "instructions": {
     "resume": [
       "Run ./init.sh first to restore context.",
@@ -257,6 +257,35 @@
       "acceptance": ["Docs reflect new input keybindings and subagent configuration if updated."],
       "validation": ["Manual doc review."],
       "notes": "Only do this if the user wants docs updated; otherwise leave pending."
+    },
+    {
+      "id": "F10",
+      "title": "TUI: Codex-style header, composer, and tool styling",
+      "status": "done",
+      "depends_on": ["F07", "F08"],
+      "files": [
+        "packages/coding-agent/src/tui/tui-app.ts",
+        "packages/coding-agent/src/tui/tool-call-formatter.ts",
+        "packages/coding-agent/src/tui/components/status-line.ts",
+        "packages/coding-agent/src/tui/components/footer-line.ts",
+        "packages/coding-agent/src/tui/theme.ts"
+      ],
+      "steps": [
+        "Add a session header card at the top of the scroll region with a rounded border, \">_ Agentik\" title, model line, and directory line.",
+        "Wrap the composer input in a rounded border box with a leading chevron prompt and Codex-style placeholder.",
+        "Switch the status line to Codex-style bullet + elapsed time + esc hint; keep it updated while streaming.",
+        "Adjust footer hints to match Codex layout (shortcuts left, context right).",
+        "Revise tool-call formatting to use \"Exploring/Explored\" headers and cyan verbs, and hide [tool] labels."
+      ],
+      "acceptance": [
+        "Header card renders on startup with model + directory info.",
+        "Composer shows a bordered input with chevron prompt and placeholder.",
+        "Status line shows elapsed time and esc hint while streaming.",
+        "Tool call output matches Codex-style summary layout.",
+        "Colors rely on ANSI palette tokens (no custom hex colors)."
+      ],
+      "validation": ["Manual TUI run and visual comparison."],
+      "notes": "Focus on layout and color parity with Codex screenshots; keep implementation lightweight."
     }
   ]
 }
