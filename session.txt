@@ -63,3 +63,7 @@ f2db0cc Add GH Actions
 2026-02-05 13:24:40 -0500
 - Completed F04: refactored TuiApp layout to include divider and bottom pane container.
 - Updated features.json status and timestamp.
+
+2026-02-05 13:28:10 -0500
+- Completed F05: swapped single-line input for Textarea composer with Enter submit and Shift+Enter newline, plus height clamp.
+- Updated features.json status and timestamp.

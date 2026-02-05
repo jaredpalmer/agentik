@@ -1,5 +1,4 @@
 import {
-  InputRenderableEvents,
   ScrollBoxRenderable,
   StyledText,
   createCliRenderer,
@@ -8,11 +7,12 @@ import {
   fg,
   stringToStyledText,
   t,
+  type KeyBinding,
   type TextChunk,
   type CliRenderer,
 } from "@opentui/core";
 import type { Agent, AgentEvent, AgentMessage } from "@agentik/runtime";
-import { Box, InputField, Loader, MarkdownBlock, TextBlock, TruncatedText } from "./components";
+import { Box, Loader, MarkdownBlock, TextBlock, TextareaField, TruncatedText } from "./components";
 
 type DisplayMessage = {
   role: string;
@@ -46,7 +46,7 @@ export class TuiApp {
   private queuedBox?: Box;
   private queuedText?: TextBlock;
   private footerText?: TextBlock;
-  private input?: InputField;
+  private input?: TextareaField;
   private messages: MessageEntry[] = [];
   private messageId = 0;
   private currentAssistantIndex?: number;
@@ -156,15 +156,25 @@ export class TuiApp {
     });
     this.queuedBox.add(this.queuedText);
     this.queuedBox.visible = false;
-    this.input = new InputField(this.renderer, {
+    const composerBindings: KeyBinding[] = [
+      { name: "return", action: "submit" },
+      { name: "linefeed", action: "submit" },
+      { name: "return", shift: true, action: "newline" },
+      { name: "linefeed", shift: true, action: "newline" },
+    ];
+    this.input = new TextareaField(this.renderer, {
       id: "input",
       width: "100%",
-      placeholder: "Type a message and press Enter...",
-      cursorColor: "#00FFFF",
-      textColor: "#FFFFFF",
-      placeholderColor: "#666666",
+      height: this.inputHeight,
+      placeholder: "Type a message. Shift+Enter for newline...",
       backgroundColor: "transparent",
-      maxLength: 4000,
+      placeholderColor: "brightBlack",
+      wrapMode: "word",
+      keyBindings: composerBindings,
+      onSubmitText: (value) => {
+        this.handleInputSubmit(value, "steering", { clearOnEmpty: true });
+      },
+      onChangeText: () => this.updateInputHeight(),
     });
     this.footerText = new TextBlock(this.renderer, {
       text: "",
@@ -183,9 +193,7 @@ export class TuiApp {
     this.renderer.root.add(this.root);
     this.renderer.start();
     this.input.focus();
-    this.input.on(InputRenderableEvents.ENTER, (value: string) => {
-      this.handleInputSubmit(value, "steering", { clearOnEmpty: true });
-    });
+    this.updateInputHeight();
     this.renderer.on("resize", () => this.render());
     this.renderer.keyInput.on("keypress", (key) => {
       if (key.name === "c" && key.ctrl) {
@@ -197,7 +205,7 @@ export class TuiApp {
       const isEnter = key.name === "return" || key.name === "enter";
       const alt = (key as { alt?: boolean }).alt ?? false;
       if (isEnter && alt && this.input) {
-        const value = this.input.value;
+        const value = this.input.plainText;
         if (!value.trim()) {
           return;
         }
@@ -228,7 +236,8 @@ export class TuiApp {
           } else {
             this.agent.dequeueLastFollowUpMessage();
           }
-          this.input.value = dequeued.content;
+          this.input.setText(dequeued.content);
+          this.input.cursorOffset = this.input.plainText.length;
           this.renderQueuedMessages();
           this.setStatus(`Dequeued ${dequeued.mode} message for editing.`);
         }
@@ -291,7 +300,7 @@ export class TuiApp {
 
   private clearInput(): void {
     if (this.input) {
-      this.input.value = "";
+      this.input.setText("");
     }
   }
 
@@ -1238,6 +1247,20 @@ export class TuiApp {
       this.statusLoader.stop();
       this.statusLoader.view.content = "";
     }
+  }
+
+  private updateInputHeight(): void {
+    if (!this.input) {
+      return;
+    }
+    const lines = Math.max(1, this.input.virtualLineCount || 1);
+    const nextHeight = Math.min(6, lines);
+    if (nextHeight === this.inputHeight) {
+      return;
+    }
+    this.inputHeight = nextHeight;
+    this.input.height = nextHeight;
+    this.render();
   }
 
   private updateDivider(): void {

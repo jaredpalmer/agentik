@@ -6,5 +6,6 @@ export { MarkdownBlock } from "./markdown";
 export { getDefaultMarkdownSyntaxStyle } from "../markdown-theme";
 export { SelectList, type SelectItem, type SelectListOptions } from "./select-list";
 export { Spacer } from "./spacer";
+export { TextareaField } from "./textarea";
 export { TextBlock } from "./text";
 export { TruncatedText } from "./truncated-text";
