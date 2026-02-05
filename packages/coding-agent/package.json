@@ -1,0 +1,34 @@
+{
+  "name": "@agentik/coding-agent",
+  "version": "0.1.0",
+  "description": "Minimal coding agent with built-in tools and TUI",
+  "license": "MIT",
+  "bin": {
+    "agentik": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "bun test",
+    "clean": "rm -rf dist",
+    "start": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "@agentik/agent": "workspace:*",
+    "@ai-sdk/anthropic": "3.0.37",
+    "@ai-sdk/openai": "3.0.25",
+    "zod": "4.3.6"
+  }
+}

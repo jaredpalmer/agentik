@@ -1,0 +1,28 @@
+{
+  "name": "@agentik/agent",
+  "version": "0.1.0",
+  "description": "Core agent with streaming, tool execution, and event-driven state management",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "bun test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "ai": "6.0.72",
+    "zod": "4.3.6"
+  }
+}
