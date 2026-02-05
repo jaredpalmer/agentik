@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "agentik-coding-agent-tui-refresh",
-  "last_updated": "2026-02-05 13:27:55 -0500",
+  "last_updated": "2026-02-05 13:30:32 -0500",
   "instructions": {
     "resume": [
       "Run ./init.sh first to restore context.",
@@ -175,7 +175,7 @@
     {
       "id": "F06",
       "title": "TUI: status indicator + footer hints",
-      "status": "pending",
+      "status": "done",
       "depends_on": ["F04"],
       "files": [
         "packages/coding-agent/src/tui/components/status-line.ts",

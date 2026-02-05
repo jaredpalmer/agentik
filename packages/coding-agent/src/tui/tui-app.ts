@@ -12,7 +12,17 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import type { Agent, AgentEvent, AgentMessage } from "@agentik/runtime";
-import { Box, Loader, MarkdownBlock, TextBlock, TextareaField, TruncatedText } from "./components";
+import {
+  Box,
+  Loader,
+  MarkdownBlock,
+  TextBlock,
+  TextareaField,
+  TruncatedText,
+  buildFooterText,
+  buildStatusText,
+} from "./components";
+import { colors } from "./theme";
 
 type DisplayMessage = {
   role: string;
@@ -130,8 +140,8 @@ export class TuiApp {
     this.statusLoader = new Loader(this.renderer, {
       message: "",
       frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-      frameColor: "#7aa2b8",
-      messageColor: "#9aa0a6",
+      frameColor: colors.accent,
+      messageColor: colors.muted,
     });
     this.statusLoader.stop();
     this.statusLoader.view.visible = false;
@@ -151,7 +161,7 @@ export class TuiApp {
     this.queuedText = new TextBlock(this.renderer, {
       text: "",
       width: "100%",
-      fg: "#9aa0a6",
+      fg: colors.muted,
       wrapMode: "word",
     });
     this.queuedBox.add(this.queuedText);
@@ -179,7 +189,7 @@ export class TuiApp {
     this.footerText = new TextBlock(this.renderer, {
       text: "",
       width: "100%",
-      fg: "#9aa0a6",
+      fg: colors.muted,
       wrapMode: "none",
       paddingX: 1,
     });
@@ -193,6 +203,7 @@ export class TuiApp {
     this.renderer.root.add(this.root);
     this.renderer.start();
     this.input.focus();
+    this.setStatus("Ready");
     this.updateInputHeight();
     this.renderer.on("resize", () => this.render());
     this.renderer.keyInput.on("keypress", (key) => {
@@ -363,6 +374,7 @@ export class TuiApp {
     if (this.queuedMessages.length === 0) {
       this.queuedBox.visible = false;
       this.queuedText.setText("");
+      this.updateFooter();
       this.renderer?.requestRender();
       return;
     }
@@ -372,6 +384,7 @@ export class TuiApp {
     );
     this.queuedText.setText([header, ...lines].join("\n"));
     this.queuedBox.visible = true;
+    this.updateFooter();
     this.renderer?.requestRender();
   }
 
@@ -1158,9 +1171,10 @@ export class TuiApp {
     const nextText = this.exitHintActive && text === "Ready" ? TuiApp.exitHintText : text;
     const displayText = nextText === "Ready" ? TuiApp.queueHintText : nextText;
     if (this.statusText) {
-      this.statusText.setText(displayText);
+      this.statusText.setText(buildStatusText(displayText));
     }
     this.updateStatusIndicator();
+    this.updateFooter();
     this.renderer?.requestRender();
   }
 
@@ -1263,6 +1277,17 @@ export class TuiApp {
     this.render();
   }
 
+  private updateFooter(): void {
+    if (!this.footerText || !this.renderer) {
+      return;
+    }
+    const styled = buildFooterText({
+      queuedCount: this.queuedMessages.length,
+      width: Math.max(0, this.renderer.terminalWidth - 2),
+    });
+    this.footerText.setText(styled);
+  }
+
   private updateDivider(): void {
     if (!this.divider || !this.renderer) {
       return;
@@ -1279,6 +1304,7 @@ export class TuiApp {
   private render(): void {
     this.trimHistory();
     this.updateDivider();
+    this.updateFooter();
     this.renderer?.requestRender();
   }
 }

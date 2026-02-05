@@ -1,11 +1,13 @@
 export { Box } from "./box";
 export { CancellableLoader } from "./cancellable-loader";
+export { buildFooterText } from "./footer-line";
 export { InputField } from "./input";
 export { Loader } from "./loader";
 export { MarkdownBlock } from "./markdown";
 export { getDefaultMarkdownSyntaxStyle } from "../markdown-theme";
 export { SelectList, type SelectItem, type SelectListOptions } from "./select-list";
 export { Spacer } from "./spacer";
+export { buildStatusText } from "./status-line";
 export { TextareaField } from "./textarea";
 export { TextBlock } from "./text";
 export { TruncatedText } from "./truncated-text";
