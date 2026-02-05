@@ -51,3 +51,7 @@ f2db0cc Add GH Actions
 
 2026-02-05 13:20:10 -0500
 - Added temporary no-op handling for subagent_* events in TuiApp to keep typecheck passing; full UI comes in F08.
+
+2026-02-05 13:21:25 -0500
+- Completed F02: CLI loads subagent configs from env/file, registers subagent tools.
+- Updated features.json status and timestamp.

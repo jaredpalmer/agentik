@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "agentik-coding-agent-tui-refresh",
-  "last_updated": "2026-02-05 13:19:29 -0500",
+  "last_updated": "2026-02-05 13:21:13 -0500",
   "instructions": {
     "resume": [
       "Run ./init.sh first to restore context.",
@@ -72,7 +72,7 @@
     {
       "id": "F02",
       "title": "CLI: subagent registry/config + tool registration",
-      "status": "pending",
+      "status": "done",
       "depends_on": ["F01"],
       "files": ["packages/coding-agent/src/cli.ts"],
       "steps": [
