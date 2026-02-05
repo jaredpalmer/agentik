@@ -341,6 +341,41 @@ export class AgentRuntime<CALL_OPTIONS = never> {
 
     const modelMessages = await this.convertToModelMessages(context);
 
+    const toolDefinitions = new Map(this.stateInternal.tools.map((tool) => [tool.name, tool]));
+    const stringifyValue = (value: unknown): string => {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (value == null) {
+        return "";
+      }
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        try {
+          return String(value);
+        } catch {
+          return "";
+        }
+      }
+    };
+    const getSubagentId = (toolName: string): string | undefined => {
+      const definition = toolDefinitions.get(toolName);
+      if (definition?.kind !== "subagent") {
+        return undefined;
+      }
+      return definition.subagentId ?? definition.name;
+    };
+    const getPromptFromArgs = (args: unknown): string => {
+      if (args && typeof args === "object" && "prompt" in args) {
+        const prompt = (args as { prompt?: unknown }).prompt;
+        if (typeof prompt === "string") {
+          return prompt;
+        }
+      }
+      return stringifyValue(args);
+    };
+
     const endedToolCalls = new Set<string>();
     const startedToolCalls = new Set<string>();
     const emitToolExecutionStart = (options: {
@@ -363,6 +398,17 @@ export class AgentRuntime<CALL_OPTIONS = never> {
         toolName: options.toolName ?? "unknown",
         args: options.args,
       });
+      if (options.toolCallId && options.toolName) {
+        const subagentId = getSubagentId(options.toolName);
+        if (subagentId) {
+          this.emit({
+            type: "subagent_start",
+            toolCallId: options.toolCallId,
+            subagentId,
+            prompt: getPromptFromArgs(options.args),
+          });
+        }
+      }
     };
     const finalizeToolCall = (options: {
       toolCallId?: string;
@@ -393,6 +439,17 @@ export class AgentRuntime<CALL_OPTIONS = never> {
           toolName,
           partialResult,
         });
+        const subagentId = getSubagentId(toolName);
+        if (subagentId) {
+          const result = partialResult as { output?: unknown; ui?: unknown };
+          this.emit({
+            type: "subagent_update",
+            toolCallId,
+            subagentId,
+            delta: stringifyValue(result?.output),
+            ui: result?.ui,
+          });
+        }
       },
       onEnd: ({ toolCallId, toolName, result, isError }) => {
         endedToolCalls.add(toolCallId);
@@ -404,6 +461,18 @@ export class AgentRuntime<CALL_OPTIONS = never> {
           result,
           isError,
         });
+        const subagentId = getSubagentId(toolName);
+        if (subagentId) {
+          const finalResult = result as { output?: unknown; ui?: unknown };
+          this.emit({
+            type: "subagent_end",
+            toolCallId,
+            subagentId,
+            output: stringifyValue(finalResult?.output),
+            isError,
+            ui: finalResult?.ui,
+          });
+        }
       },
       shouldSkip: () =>
         this.skipToolCalls

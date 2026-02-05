@@ -44,3 +44,10 @@ f2db0cc Add GH Actions
 2026-02-05 13:18:15 -0500
 - Completed F00 (planning assets) and ran init.sh successfully.
 - Updated features.json status for F00.
+
+2026-02-05 13:19:40 -0500
+- Completed F01: added subagent metadata to AgentToolDefinition and emitted subagent_* events in AgentRuntime.
+- Updated features.json status and timestamp.
+
+2026-02-05 13:20:10 -0500
+- Added temporary no-op handling for subagent_* events in TuiApp to keep typecheck passing; full UI comes in F08.

@@ -58,6 +58,8 @@ type AgentToolDefinitionBase<INPUT, OUTPUT, UI> = {
   description?: string;
   title?: string;
   label?: string;
+  kind?: "subagent";
+  subagentId?: string;
   inputSchema: FlexibleSchema<INPUT>;
   needsApproval?: boolean | ToolNeedsApprovalFunction<[INPUT] extends [never] ? unknown : INPUT>;
   toModelOutput?: (options: {
@@ -147,6 +149,27 @@ export type AgentEvent =
       toolName: string;
       result: unknown;
       isError: boolean;
+    }
+  | {
+      type: "subagent_start";
+      toolCallId: string;
+      subagentId: string;
+      prompt: string;
+    }
+  | {
+      type: "subagent_update";
+      toolCallId: string;
+      subagentId: string;
+      delta: string;
+      ui?: unknown;
+    }
+  | {
+      type: "subagent_end";
+      toolCallId: string;
+      subagentId: string;
+      output: string;
+      isError: boolean;
+      ui?: unknown;
     }
   | { type: "error"; error: unknown };
 

@@ -130,6 +130,8 @@ export function createSubagentTool<CALL_OPTIONS = never>(
     name: toolName,
     label: options.label ?? toolName,
     description: options.description ?? `Delegate work to ${options.id}.`,
+    kind: "subagent",
+    subagentId: options.id,
     inputSchema: subagentSchema,
     toModelOutput: ({ output }) => ({ type: "text", value: output ?? "" }),
     execute: async function* (input, execOptions) {

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "agentik-coding-agent-tui-refresh",
-  "last_updated": "2026-02-05 13:15:25 -0500",
+  "last_updated": "2026-02-05 13:19:29 -0500",
   "instructions": {
     "resume": [
       "Run ./init.sh first to restore context.",
@@ -40,7 +40,7 @@
     {
       "id": "F01",
       "title": "Runtime: subagent metadata + event emission",
-      "status": "pending",
+      "status": "done",
       "depends_on": ["F00"],
       "files": [
         "packages/runtime/src/types.ts",

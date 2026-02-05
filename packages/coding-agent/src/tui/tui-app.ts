@@ -485,6 +485,11 @@ export class TuiApp {
         this.render();
         break;
       }
+      case "subagent_start":
+      case "subagent_update":
+      case "subagent_end": {
+        break;
+      }
       case "error": {
         if (this.isAborting && this.isAbortError(event.error)) {
           this.isAborting = false;
