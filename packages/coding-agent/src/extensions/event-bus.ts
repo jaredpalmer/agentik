@@ -23,9 +23,16 @@ export function createEventBus(): EventBusController {
     emit(channel: string, data: unknown): void {
       const set = handlers.get(channel);
       if (!set) return;
-      for (const handler of set) {
+      for (const handler of [...set]) {
         try {
-          handler(data);
+          // Handler is typed as returning void, but at runtime it may
+          // return a Promise. Catch async rejections to prevent unhandled errors.
+          const result = handler(data) as unknown;
+          if (result && typeof (result as Promise<unknown>).catch === "function") {
+            (result as Promise<unknown>).catch((err) => {
+              console.error(`Event bus async handler error (${channel}):`, err);
+            });
+          }
         } catch (err) {
           console.error(`Event bus handler error (${channel}):`, err);
         }

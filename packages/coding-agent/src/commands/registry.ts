@@ -78,7 +78,11 @@ export class CommandRegistry {
     if (!command) return false;
 
     const ctx: CommandContext = { args };
-    await command.handler(args, ctx);
+    try {
+      await command.handler(args, ctx);
+    } catch (err) {
+      console.error(`Command "/${name}" error:`, err);
+    }
     return true;
   }
 
@@ -96,7 +100,7 @@ export class CommandRegistry {
       result.push({
         name: cmd.name,
         description: cmd.description,
-        source: cmd.name === "help" ? "builtin" : "extension",
+        source: cmd.source ?? "extension",
       });
     }
     return result.sort((a, b) => a.name.localeCompare(b.name));
@@ -111,6 +115,7 @@ export class CommandRegistry {
     this.commands.set("help", {
       name: "help",
       description: "List available commands",
+      source: "builtin",
       handler: () => {
         const commands = this.listCommands();
         const lines = commands.map((c) => {

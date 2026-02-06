@@ -2,7 +2,7 @@
  * Provider registration — extensions can register custom LLM providers.
  *
  * Each provider has a name, base URL, API key, and a list of models.
- * The registry queues registrations; the app processes them during startup.
+ * Registrations are stored immediately and available via get().
  */
 
 /** Configuration for a model within a provider. */

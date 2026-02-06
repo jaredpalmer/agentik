@@ -121,6 +121,43 @@ describe("loadExtensions", () => {
   });
 });
 
+describe("discoverExtensions — additional file types", () => {
+  it("should discover .js files", () => {
+    const cwd = createTmpDir();
+    const extDir = join(cwd, ".agentik", "extensions");
+    mkdirSync(extDir, { recursive: true });
+    writeFileSync(join(extDir, "my-ext.js"), "export default () => {}");
+
+    const paths = discoverExtensions(cwd);
+    expect(paths).toHaveLength(1);
+    expect(paths[0]).toEndWith("my-ext.js");
+  });
+
+  it("should fall back to index.js when no index.ts", () => {
+    const cwd = createTmpDir();
+    const subDir = join(cwd, ".agentik", "extensions", "my-ext");
+    mkdirSync(subDir, { recursive: true });
+    writeFileSync(join(subDir, "index.js"), "export default () => {}");
+
+    const paths = discoverExtensions(cwd);
+    expect(paths).toHaveLength(1);
+    expect(paths[0]).toEndWith("index.js");
+  });
+});
+
+describe("loadExtensions — import errors", () => {
+  it("should report error for file that throws on import", async () => {
+    const dir = createTmpDir();
+    const extPath = join(dir, "throws.ts");
+    writeFileSync(extPath, 'throw new Error("init error");');
+
+    const result = await loadExtensions([extPath]);
+    expect(result.extensions).toHaveLength(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].error).toContain("init error");
+  });
+});
+
 describe("discoverAndLoadExtensions", () => {
   it("should discover and load extensions from project dir", async () => {
     const cwd = createTmpDir();

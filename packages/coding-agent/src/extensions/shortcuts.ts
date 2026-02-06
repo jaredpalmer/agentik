@@ -67,11 +67,16 @@ export class ShortcutRegistry {
 
   /** Execute a shortcut handler. Returns false if not found. */
   async execute(key: string): Promise<boolean> {
-    const shortcut = this.shortcuts.get(normalizeKey(key));
+    const normalized = normalizeKey(key);
+    const shortcut = this.shortcuts.get(normalized);
     if (!shortcut) return false;
 
-    const ctx: ShortcutContext = { key: normalizeKey(key) };
-    await shortcut.handler(ctx);
+    const ctx: ShortcutContext = { key: normalized };
+    try {
+      await shortcut.handler(ctx);
+    } catch (err) {
+      console.error(`Shortcut "${normalized}" error:`, err);
+    }
     return true;
   }
 
@@ -91,7 +96,7 @@ export class ShortcutRegistry {
   }
 }
 
-/** Normalize key identifiers: lowercase, consistent ordering. */
+/** Normalize key identifiers: lowercase and trim. */
 function normalizeKey(key: string): string {
   return key.toLowerCase().trim();
 }

@@ -33,8 +33,8 @@ export interface CodingExtensionAPI extends ExtensionAPI {
   // Commands
   // =========================================================================
 
-  /** Register a slash command. */
-  registerCommand(name: string, options: Omit<RegisteredCommand, "name">): void;
+  /** Register a slash command. Returns a cleanup function. */
+  registerCommand(name: string, options: Omit<RegisteredCommand, "name">): () => void;
 
   /** Get all available slash commands. */
   getCommands(): SlashCommandInfo[];
@@ -43,20 +43,20 @@ export interface CodingExtensionAPI extends ExtensionAPI {
   // Keyboard Shortcuts
   // =========================================================================
 
-  /** Register a keyboard shortcut. */
+  /** Register a keyboard shortcut. Returns a cleanup function. */
   registerShortcut(
     key: string,
     options: {
       description?: string;
       handler: (ctx: ShortcutContext) => Promise<void> | void;
     }
-  ): void;
+  ): () => void;
 
   // =========================================================================
   // CLI Flags
   // =========================================================================
 
-  /** Register a CLI flag. */
+  /** Register a CLI flag. Returns a cleanup function. */
   registerFlag(
     name: string,
     options: {
@@ -64,7 +64,7 @@ export interface CodingExtensionAPI extends ExtensionAPI {
       type: "boolean" | "string";
       default?: boolean | string;
     }
-  ): void;
+  ): () => void;
 
   /** Get the value of a registered CLI flag. */
   getFlag(name: string): boolean | string | undefined;
@@ -73,15 +73,18 @@ export interface CodingExtensionAPI extends ExtensionAPI {
   // Provider Registration
   // =========================================================================
 
-  /** Register or override a model provider. */
-  registerProvider(name: string, config: ProviderConfig): void;
+  /** Register or override a model provider. Returns a cleanup function. */
+  registerProvider(name: string, config: ProviderConfig): () => void;
 
   // =========================================================================
   // Message Rendering
   // =========================================================================
 
-  /** Register a custom renderer for a custom message type. */
-  registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRendererFn<T>): void;
+  /** Register a custom renderer for a custom message type. Returns a cleanup function. */
+  registerMessageRenderer<T = unknown>(
+    customType: string,
+    renderer: MessageRendererFn<T>
+  ): () => void;
 
   /** Append a custom entry to the session (not sent to LLM). */
   appendEntry<T = unknown>(customType: string, data?: T): void;
@@ -125,28 +128,19 @@ export function createCodingExtensionAPI(options: CodingExtensionAPIOptions): Co
   } = options;
 
   return {
-    // Delegate core ExtensionAPI methods
+    // Forward all core ExtensionAPI methods
+    ...coreApi,
+    // Re-define state as a getter so it stays reactive
     get state() {
       return coreApi.state;
     },
-    registerTool: coreApi.registerTool.bind(coreApi),
-    unregisterTool: coreApi.unregisterTool.bind(coreApi),
-    getActiveTools: coreApi.getActiveTools.bind(coreApi),
-    setActiveTools: coreApi.setActiveTools.bind(coreApi),
-    on: coreApi.on.bind(coreApi),
-    steer: coreApi.steer.bind(coreApi),
-    followUp: coreApi.followUp.bind(coreApi),
-    sendUserMessage: coreApi.sendUserMessage.bind(coreApi),
-    setModel: coreApi.setModel.bind(coreApi),
-    getThinkingLevel: coreApi.getThinkingLevel.bind(coreApi),
-    setThinkingLevel: coreApi.setThinkingLevel.bind(coreApi),
 
     // Coding-agent additions
     ui,
     events: eventBus,
 
     registerCommand(name, opts) {
-      commandRegistry.register(name, opts);
+      return commandRegistry.register(name, opts);
     },
 
     getCommands() {
@@ -154,11 +148,11 @@ export function createCodingExtensionAPI(options: CodingExtensionAPIOptions): Co
     },
 
     registerShortcut(key, opts) {
-      shortcutRegistry.register(key, opts);
+      return shortcutRegistry.register(key, opts);
     },
 
     registerFlag(name, opts) {
-      flagRegistry.register(name, opts);
+      return flagRegistry.register(name, opts);
     },
 
     getFlag(name) {
@@ -166,11 +160,11 @@ export function createCodingExtensionAPI(options: CodingExtensionAPIOptions): Co
     },
 
     registerProvider(name, config) {
-      providerRegistry.register(name, config);
+      return providerRegistry.register(name, config);
     },
 
     registerMessageRenderer(customType, renderer) {
-      messageRendererRegistry.register(customType, renderer);
+      return messageRendererRegistry.register(customType, renderer);
     },
 
     appendEntry(customType, data) {

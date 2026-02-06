@@ -86,4 +86,27 @@ describe("EventBus", () => {
     expect(() => bus.emit("test", null)).not.toThrow();
     expect(results).toEqual([2]);
   });
+
+  it("should handle async handler errors", async () => {
+    const bus = createEventBus();
+    const results: number[] = [];
+
+    // Deliberately pass an async handler (runtime misuse) to verify graceful handling.
+    // eslint-disable-next-line typescript-eslint/no-misused-promises
+    bus.on("test", (async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      throw new Error("async boom");
+    }) as (data: unknown) => void);
+    bus.on("test", () => {
+      results.push(2);
+    });
+
+    // Should not throw — async rejection is caught internally
+    expect(() => bus.emit("test", null)).not.toThrow();
+    // Second (sync) handler still runs
+    expect(results).toEqual([2]);
+
+    // Wait for the async rejection to be caught
+    await new Promise((r) => setTimeout(r, 20));
+  });
 });

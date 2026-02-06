@@ -21,6 +21,7 @@ export interface CommandContext {
 export interface RegisteredCommand {
   name: string;
   description?: string;
+  source?: SlashCommandSource;
   getArgumentCompletions?: (prefix: string) => AutocompleteItem[] | null;
   handler: (args: string, ctx: CommandContext) => Promise<void> | void;
 }

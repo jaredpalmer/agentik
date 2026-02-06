@@ -5,6 +5,7 @@ import type {
   AgentStartEvent,
   AgentTool,
   Extension,
+  ImageContent,
   MessageEndEvent,
   MessageStartEvent,
   ToolExecEndEvent,
@@ -390,5 +391,137 @@ describe("Active tools management", () => {
     // Tools are filtered but all still exist on state
     expect(agent.state.tools).toHaveLength(2);
     expect(agent.getActiveTools()).toEqual(["tool1"]);
+  });
+});
+
+describe("Input hooks with images", () => {
+  it("should pass images through input hooks", async () => {
+    const model = createMockModel([{ text: "hi" }]);
+    const agent = new Agent({ initialState: { model } });
+
+    let receivedImages: ImageContent[] | undefined;
+    const ext: Extension = (api) => {
+      api.on("input", (text, images) => {
+        receivedImages = images;
+        // Transform images by adding a new one
+        const newImages: ImageContent[] = [
+          ...(images ?? []),
+          { type: "image", data: "new-image-data", mimeType: "image/png" },
+        ];
+        return { action: "transform", text, images: newImages };
+      });
+    };
+
+    agent.use(ext);
+    const inputImages: ImageContent[] = [
+      { type: "image", data: "dGVzdA==", mimeType: "image/jpeg" },
+    ];
+    await agent.prompt("describe this", inputImages);
+
+    expect(receivedImages).toHaveLength(1);
+    expect(receivedImages![0].mimeType).toBe("image/jpeg");
+
+    // User message should have original text + transformed images (original + new)
+    const userMsg = agent.state.messages[0];
+    expect(userMsg.role).toBe("user");
+    const content = userMsg.content as Array<{ type: string }>;
+    // text + 2 images (original + added by hook)
+    const imageContents = content.filter((c) => c.type === "image");
+    expect(imageContents).toHaveLength(2);
+  });
+});
+
+describe("sendUserMessage with content array", () => {
+  it("should handle sendUserMessage with content array", async () => {
+    const model = createMockModel([{ text: "r1" }, { text: "r2" }]);
+    const agent = new Agent({ initialState: { model } });
+
+    const ext: Extension = (api) => {
+      api.on("event", (e) => {
+        if (e.type === "agent_start") {
+          api.sendUserMessage([
+            { type: "text", text: "look at this" },
+            { type: "image", data: "aW1n", mimeType: "image/png" },
+          ]);
+        }
+      });
+    };
+
+    agent.use(ext);
+    await agent.prompt("hello");
+
+    const userMsgs = agent.state.messages.filter((m) => m.role === "user");
+    expect(userMsgs.length).toBeGreaterThanOrEqual(2);
+
+    // The follow-up message should have the array content
+    const followUpMsg = userMsgs[1];
+    const content = followUpMsg.content as Array<{ type: string; text?: string }>;
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("text");
+    expect(content[0].text).toBe("look at this");
+    expect(content[1].type).toBe("image");
+  });
+});
+
+describe("Extension API error handling", () => {
+  it("should throw for unknown event type in api.on()", () => {
+    const agent = new Agent();
+
+    const ext: Extension = (api) => {
+      expect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (api.on as any)("invalid_event", () => {});
+      }).toThrow("Unknown event: invalid_event");
+    };
+
+    agent.use(ext);
+  });
+
+  it("should call extension cleanup callback on dispose", () => {
+    const agent = new Agent();
+
+    let cleanupCalled = false;
+    const ext: Extension = () => {
+      // Return a cleanup function
+      return () => {
+        cleanupCalled = true;
+      };
+    };
+
+    const dispose = agent.use(ext);
+    expect(cleanupCalled).toBe(false);
+
+    dispose();
+    expect(cleanupCalled).toBe(true);
+  });
+
+  it("should handle input hook errors gracefully", async () => {
+    const model = createMockModel([{ text: "hi" }]);
+    const agent = new Agent({ initialState: { model } });
+
+    let secondHookCalled = false;
+
+    const ext1: Extension = (api) => {
+      api.on("input", () => {
+        throw new Error("hook exploded");
+      });
+    };
+
+    const ext2: Extension = (api) => {
+      api.on("input", (text) => {
+        secondHookCalled = true;
+        return { action: "transform", text: text + "!" };
+      });
+    };
+
+    agent.use(ext1);
+    agent.use(ext2);
+    await agent.prompt("hello");
+
+    // The throwing hook is caught, and the second hook still runs
+    expect(secondHookCalled).toBe(true);
+    const userMsg = agent.state.messages[0];
+    const content = userMsg.content as Array<{ type: string; text: string }>;
+    expect(content[0].text).toBe("hello!");
   });
 });

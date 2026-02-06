@@ -260,13 +260,17 @@ export class Agent {
     let currentImages = images;
 
     for (const hook of this.inputHooks) {
-      const result = await hook(currentText, currentImages);
-      if (result.action === "handled") {
-        return null;
-      }
-      if (result.action === "transform") {
-        currentText = result.text;
-        currentImages = result.images ?? currentImages;
+      try {
+        const result = await hook(currentText, currentImages);
+        if (result.action === "handled") {
+          return null;
+        }
+        if (result.action === "transform") {
+          currentText = result.text;
+          currentImages = result.images ?? currentImages;
+        }
+      } catch (err) {
+        console.error("Input hook error:", err);
       }
     }
 
@@ -763,13 +767,21 @@ export class Agent {
   private emit(e: AgentEvent): void {
     // Global listeners
     for (const listener of this.listeners) {
-      listener(e);
+      try {
+        listener(e);
+      } catch (err) {
+        console.error("Event listener error:", err);
+      }
     }
     // Typed event handlers
     const handlers = this.typedEventHandlers.get(e.type);
     if (handlers) {
       for (const handler of handlers) {
-        handler(e);
+        try {
+          handler(e);
+        } catch (err) {
+          console.error("Typed event handler error:", err);
+        }
       }
     }
   }

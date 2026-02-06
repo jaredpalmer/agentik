@@ -173,4 +173,28 @@ describe("CommandRegistry", () => {
     const registry = new CommandRegistry();
     expect(registry.getCompletions("nonexistent", "")).toBeNull();
   });
+
+  it("should handle command handler errors gracefully", async () => {
+    const registry = new CommandRegistry();
+    registry.register("boom", {
+      handler: () => {
+        throw new Error("handler exploded");
+      },
+    });
+
+    // Should not throw, and should still return true (command was found)
+    const result = await registry.execute("boom", "");
+    expect(result).toBe(true);
+  });
+
+  it("should execute built-in help command", async () => {
+    const registry = new CommandRegistry();
+    registry.register("greet", {
+      description: "Say hello",
+      handler: () => {},
+    });
+
+    const result = await registry.execute("help", "");
+    expect(result).toBe(true);
+  });
 });

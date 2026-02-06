@@ -44,7 +44,7 @@ function expandPath(p: string): string {
  * Discover extension file paths in a directory (one level deep).
  *
  * - Direct files: dir/*.ts or *.js -> load
- * - Subdirectories with index: dir/star/index.ts or index.js -> load
+ * - Subdirectories with index: dir/{subdir}/index.ts or index.js -> load
  */
 function discoverInDir(dir: string): string[] {
   const expanded = expandPath(dir);
@@ -73,8 +73,9 @@ function discoverInDir(dir: string): string[] {
         }
       }
     }
-  } catch {
-    // Directory not readable, skip
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to read extensions directory ${expanded}: ${message}`);
   }
 
   return discovered;

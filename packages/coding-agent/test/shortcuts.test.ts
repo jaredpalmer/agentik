@@ -128,4 +128,17 @@ describe("ShortcutRegistry", () => {
     expect(ShortcutRegistry.isReserved("ctrl+k")).toBe(false);
     expect(ShortcutRegistry.isReserved("f1")).toBe(false);
   });
+
+  it("should handle shortcut handler errors gracefully", async () => {
+    const registry = new ShortcutRegistry();
+    registry.register("ctrl+k", {
+      handler: () => {
+        throw new Error("shortcut exploded");
+      },
+    });
+
+    // Should not throw, and should still return true (shortcut was found)
+    const result = await registry.execute("ctrl+k");
+    expect(result).toBe(true);
+  });
 });
