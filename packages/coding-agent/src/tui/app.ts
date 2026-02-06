@@ -41,6 +41,7 @@ interface MessageBlock {
 interface PendingTool {
   block: MessageBlock;
   toolName: string;
+  args: unknown;
   startTime: number;
 }
 
@@ -52,6 +53,20 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  read_file: "Read",
+  write_file: "Write",
+  bash: "Bash",
+  edit: "Edit",
+  glob: "Glob",
+  grep: "Grep",
+  ls: "LS",
+};
+
+function getToolDisplayName(toolName: string): string {
+  return TOOL_DISPLAY_NAMES[toolName] ?? toolName;
+}
+
 function summarizeToolArgs(toolName: string, args: unknown): string {
   if (!args || typeof args !== "object") return "";
   const a = args as Record<string, unknown>;
@@ -61,12 +76,9 @@ function summarizeToolArgs(toolName: string, args: unknown): string {
       return typeof a.command === "string" ? truncate(a.command, 60) : "";
     case "read_file":
     case "write_file":
-      return typeof a.file_path === "string" ? a.file_path : "";
-    case "edit": {
-      const path = typeof a.file_path === "string" ? a.file_path : "";
-      const old = typeof a.old_string === "string" ? truncate(a.old_string, 30) : "";
-      return old ? `${path} "${old}"` : path;
-    }
+      return typeof a.path === "string" ? a.path : "";
+    case "edit":
+      return typeof a.path === "string" ? a.path : "";
     case "glob":
       return typeof a.pattern === "string" ? a.pattern : "";
     case "grep": {
@@ -108,6 +120,14 @@ function getToolDiff(result: unknown): string | null {
   return null;
 }
 
+function getToolResultLines(result: unknown, maxLines: number): string[] {
+  const text = getToolResultText(result);
+  if (!text) return [];
+  const lines = text.split("\n");
+  if (lines.length <= maxLines) return lines;
+  return [...lines.slice(0, maxLines), `… ${lines.length - maxLines} more lines`];
+}
+
 function summarizeToolResult(result: unknown, isError: boolean): string {
   const text = getToolResultText(result);
   if (isError && text) return truncate(text, 80);
@@ -137,7 +157,7 @@ export class TuiApp {
   private currentAssistant: MessageBlock | null = null;
   private currentThinking: MessageBlock | null = null;
   private currentThinkingText = "";
-  private hideThinking = false;
+  private hideThinking = true;
   private totalTokensIn = 0;
   private totalTokensOut = 0;
   private totalCacheRead = 0;
@@ -253,10 +273,11 @@ export class TuiApp {
 
   private buildHeaderContent(): StyledText {
     const thinkingLevel = this.agent.state.thinkingLevel;
-    const thinkingStr = thinkingLevel !== "off" ? ` | thinking: ${thinkingLevel}` : "";
-    return t`${bold(fg(colors.cyan)("agentik"))} ${dim("coding agent")}
-${dim(`${this.provider}/${this.modelId}${thinkingStr}`)}
-${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking | PgUp/PgDn scroll | /help")}`;
+    const thinkingStr = thinkingLevel !== "off" ? ` \u00b7 thinking: ${thinkingLevel}` : "";
+    const cwd = process.cwd().replace(process.env.HOME ?? "", "~");
+    return t`${bold(fg(colors.cyan)("agentik"))} ${dim("v0.1.0")}
+${dim(`${this.provider}/${this.modelId}${thinkingStr} \u00b7 ${cwd}`)}
+${dim("Enter send \u00b7 Ctrl+C cancel \u00b7 Ctrl+T thinking \u00b7 PgUp/PgDn scroll \u00b7 /help")}`;
   }
 
   private updateInputBorderColor(): void {
@@ -343,32 +364,55 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
   }
 
   private onToolStart(toolCallId: string, toolName: string, args: unknown): void {
+    const displayName = getToolDisplayName(toolName);
     const summary = summarizeToolArgs(toolName, args);
-    const argText = summary ? ` ${summary}` : "";
+    const argText = summary ? dim(`(${summary})`) : "";
     const block = this.addMessageBlock("tool");
     if (block.text) {
-      block.text.content = t`${fg(colors.toolLabel)(dim(`  \u29D7 ${toolName}`))}${dim(argText)}`;
+      block.text.content = t`${fg(colors.toolIcon)("\u25CF")} ${bold(displayName)}${argText}`;
     }
-    this.pendingTools.set(toolCallId, { block, toolName, startTime: Date.now() });
+    this.pendingTools.set(toolCallId, { block, toolName, args, startTime: Date.now() });
   }
 
   private onToolEnd(toolCallId: string, toolName: string, result: unknown, isError: boolean): void {
+    const r = this.renderer;
     const pending = this.pendingTools.get(toolCallId);
-    const elapsed = pending ? Date.now() - pending.startTime : 0;
-    const timeStr = elapsed > 500 ? ` ${(elapsed / 1000).toFixed(1)}s` : "";
     this.pendingTools.delete(toolCallId);
 
-    const icon = isError ? "\u2717" : "\u2713";
-    const statusColor = isError ? colors.errorFg : colors.successFg;
-    const resultSummary = summarizeToolResult(result, isError);
-    const resultText = resultSummary ? ` ${resultSummary}` : "";
+    const displayName = getToolDisplayName(toolName);
+    const bulletColor = isError ? colors.errorFg : colors.toolIcon;
 
     if (pending?.block.text) {
-      pending.block.text.content = t`${fg(statusColor)(dim(`  ${icon} ${toolName}${timeStr}`))}${dim(resultText)}`;
+      // Update the main tool line with final bullet color + args
+      const argSummary = summarizeToolArgs(toolName, pending.args);
+      const argText = argSummary ? dim(`(${argSummary})`) : "";
+      pending.block.text.content = t`${fg(bulletColor)("\u25CF")} ${bold(displayName)}${argText}`;
+
+      // Add result lines below with ⎿ connector
+      if (isError) {
+        const errorText = summarizeToolResult(result, true);
+        const resultLine = new TextRenderable(r, {
+          width: "100%",
+          content: t`  ${dim("\u23BF")}  ${fg(colors.errorFg)(`Error: ${errorText}`)}`,
+        });
+        pending.block.container.add(resultLine);
+      } else {
+        const lines = getToolResultLines(result, 4);
+        for (let i = 0; i < lines.length; i++) {
+          const lineText = truncate(lines[i], 80);
+          const content =
+            i === 0 ? t`  ${dim("\u23BF")}  ${dim(lineText)}` : t`     ${dim(lineText)}`;
+          const resultLine = new TextRenderable(r, {
+            width: "100%",
+            content,
+          });
+          pending.block.container.add(resultLine);
+        }
+      }
     } else {
       const block = this.addMessageBlock("status");
       if (block.text) {
-        block.text.content = t`${fg(statusColor)(dim(`  ${icon} ${toolName}${timeStr}`))}`;
+        block.text.content = t`${fg(bulletColor)("\u25CF")} ${bold(displayName)}`;
       }
     }
 
@@ -385,7 +429,7 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     const container = new BoxRenderable(r, {
       width: "100%",
       flexDirection: "column",
-      paddingLeft: 2,
+      paddingLeft: 4,
     });
 
     for (const line of diff.split("\n")) {
@@ -419,6 +463,10 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
   }
 
   private onAgentEnd(): void {
+    const error = this.agent.state.error;
+    if (error) {
+      this.addErrorMessage(error);
+    }
     this.updateFooter();
     this.textarea.focus();
   }
@@ -430,13 +478,13 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
 
       if (text.startsWith("/")) {
         if (this.handleSlashCommand(text)) {
-          this.textarea.initialValue = "";
+          this.textarea.setText("");
           return;
         }
       }
 
       this.addUserMessage(text);
-      this.textarea.initialValue = "";
+      this.textarea.setText("");
 
       this.agent.prompt(text).catch((err: unknown) => {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -612,26 +660,30 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
     const container = new BoxRenderable(r, {
       width: "100%",
       flexDirection: "column",
-      paddingTop: type === "status" || type === "tool" ? 0 : 1,
+      paddingTop: type === "status" ? 0 : 1,
     });
 
     const block: MessageBlock = { type, container };
 
     if (type === "assistant") {
-      const label = new TextRenderable(r, {
+      const row = new BoxRenderable(r, {
         width: "100%",
-        content: t`${bold(fg(colors.assistantLabel)("Assistant"))}`,
+        flexDirection: "row",
       });
-      container.add(label);
-
+      const bullet = new TextRenderable(r, {
+        width: 2,
+        content: t`${fg(colors.toolIcon)("\u25CF")}`,
+      });
+      row.add(bullet);
       const md = new MarkdownRenderable(r, {
-        width: "100%",
+        flexGrow: 1,
         syntaxStyle: this.syntaxStyle,
         streaming: true,
         conceal: true,
         content: "",
       });
-      container.add(md);
+      row.add(md);
+      container.add(row);
       block.markdown = md;
     } else if (type === "thinking") {
       const txt = new TextRenderable(r, {
@@ -653,21 +705,16 @@ ${dim("Enter send | Shift+Enter newline | Ctrl+C cancel/exit | Ctrl+T thinking |
 
   private addUserMessage(text: string): void {
     const r = this.renderer;
+
     const container = new BoxRenderable(r, {
       width: "100%",
       flexDirection: "column",
       paddingTop: 1,
     });
 
-    const label = new TextRenderable(r, {
-      width: "100%",
-      content: t`${bold(fg(colors.userLabel)("You"))}`,
-    });
-    container.add(label);
-
     const body = new TextRenderable(r, {
       width: "100%",
-      content: text,
+      content: t`${fg(colors.userPrompt)("\u276F")} ${bold(text)}`,
     });
     container.add(body);
 

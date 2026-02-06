@@ -20,7 +20,9 @@ export const colors = {
 
   // Semantic
   userLabel: "#7aa2f7",
+  userPrompt: "#7aa2f7",
   assistantLabel: "#9ece6a",
+  toolIcon: "#9ece6a",
   toolLabel: "#e0af68",
   errorFg: "#f7768e",
   successFg: "#9ece6a",
