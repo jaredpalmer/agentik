@@ -231,16 +231,114 @@ export type AfterToolResultHook = (
   result: ToolResultMessage
 ) => Promise<ToolResultMessage>;
 
+// ============================================================================
+// Typed Extension Event Types
+// ============================================================================
+
+export interface AgentStartEvent {
+  type: "agent_start";
+}
+
+export interface AgentEndEvent {
+  type: "agent_end";
+  messages: AgentMessage[];
+}
+
+export interface TurnStartEvent {
+  type: "turn_start";
+}
+
+export interface TurnEndEvent {
+  type: "turn_end";
+  message: AgentMessage;
+  toolResults: ToolResultMessage[];
+}
+
+export interface MessageStartEvent {
+  type: "message_start";
+  message: AgentMessage;
+}
+
+export interface MessageEndEvent {
+  type: "message_end";
+  message: AgentMessage;
+}
+
+export interface ToolExecStartEvent {
+  type: "tool_execution_start";
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+}
+
+export interface ToolExecEndEvent {
+  type: "tool_execution_end";
+  toolCallId: string;
+  toolName: string;
+  result: unknown;
+  isError: boolean;
+}
+
+// ============================================================================
+// Input Hook Types
+// ============================================================================
+
+export type InputHookResult =
+  | { action: "continue" }
+  | { action: "transform"; text: string; images?: ImageContent[] }
+  | { action: "handled" };
+
+export type InputHook = (
+  text: string,
+  images?: ImageContent[]
+) => Promise<InputHookResult> | InputHookResult;
+
+// ============================================================================
+// Extension API
+// ============================================================================
+
 export interface ExtensionAPI {
   readonly state: AgentState;
+
+  // Tool management
   registerTool(tool: AgentTool): () => void;
   unregisterTool(name: string): boolean;
+  getActiveTools(): string[];
+  setActiveTools(names: string[]): void;
+
+  // Existing hooks
   on(event: "transformContext", hook: TransformContextHook): () => void;
   on(event: "beforeToolCall", hook: BeforeToolCallHook): () => void;
   on(event: "afterToolResult", hook: AfterToolResultHook): () => void;
+
+  // Raw event listener (all events)
   on(event: "event", listener: (e: AgentEvent) => void): () => void;
+
+  // Typed event subscriptions
+  on(event: "agent_start", handler: (e: AgentStartEvent) => void): () => void;
+  on(event: "agent_end", handler: (e: AgentEndEvent) => void): () => void;
+  on(event: "turn_start", handler: (e: TurnStartEvent) => void): () => void;
+  on(event: "turn_end", handler: (e: TurnEndEvent) => void): () => void;
+  on(event: "message_start", handler: (e: MessageStartEvent) => void): () => void;
+  on(event: "message_end", handler: (e: MessageEndEvent) => void): () => void;
+  on(event: "tool_execution_start", handler: (e: ToolExecStartEvent) => void): () => void;
+  on(event: "tool_execution_end", handler: (e: ToolExecEndEvent) => void): () => void;
+
+  // Input hook
+  on(event: "input", handler: InputHook): () => void;
+
+  // Message delivery
   steer(message: AgentMessage): void;
   followUp(message: AgentMessage): void;
+  sendUserMessage(
+    content: string | (TextContent | ImageContent)[],
+    options?: { deliverAs?: "steer" | "followUp" }
+  ): void;
+
+  // Model and thinking
+  setModel(model: LanguageModel): void;
+  getThinkingLevel(): ThinkingLevel;
+  setThinkingLevel(level: ThinkingLevel): void;
 }
 
 export type Extension = (api: ExtensionAPI) => void | (() => void);

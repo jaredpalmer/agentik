@@ -17,6 +17,7 @@ import type {
   Extension,
   ExtensionAPI,
   ImageContent,
+  InputHook,
   Message,
   TextContent,
   ThinkingBudgets,
@@ -97,7 +98,10 @@ export class Agent {
   private transformContextHooks: TransformContextHook[] = [];
   private beforeToolCallHooks: BeforeToolCallHook[] = [];
   private afterToolResultHooks: AfterToolResultHook[] = [];
+  private inputHooks: InputHook[] = [];
+  private typedEventHandlers = new Map<string, Set<(e: AgentEvent) => void>>();
   private extensionCleanups: Array<() => void> = [];
+  private _activeTools: Set<string> | null = null;
 
   constructor(opts: AgentOptions = {}) {
     // We must have a model - if none provided, we'll create a placeholder that throws on use
@@ -231,6 +235,47 @@ export class Agent {
     this.followUpQueue = [];
   }
 
+  /** Get names of currently active tools. If not set, all tools are active. */
+  getActiveTools(): string[] {
+    if (this._activeTools) {
+      return [...this._activeTools];
+    }
+    return this._state.tools.map((t) => t.name);
+  }
+
+  /** Set which tools are active by name. Only active tools are sent to the LLM. */
+  setActiveTools(names: string[]): void {
+    this._activeTools = new Set(names);
+  }
+
+  /**
+   * Run input hooks before creating a user message.
+   * Returns the (possibly transformed) text and images, or null if handled.
+   */
+  async runInputHooks(
+    text: string,
+    images?: ImageContent[]
+  ): Promise<{ text: string; images?: ImageContent[] } | null> {
+    let currentText = text;
+    let currentImages = images;
+
+    for (const hook of this.inputHooks) {
+      const result = await hook(currentText, currentImages);
+      if (result.action === "handled") {
+        return null;
+      }
+      if (result.action === "transform") {
+        currentText = result.text;
+        currentImages = result.images ?? currentImages;
+      }
+    }
+
+    if (currentText !== text || currentImages !== images) {
+      return { text: currentText, images: currentImages };
+    }
+    return { text, images };
+  }
+
   /**
    * Register an extension. Returns a cleanup function that removes all hooks
    * and tools registered by this extension.
@@ -241,6 +286,8 @@ export class Agent {
     const registeredBeforeToolCall: BeforeToolCallHook[] = [];
     const registeredAfterToolResult: AfterToolResultHook[] = [];
     const registeredEventListeners: Array<(e: AgentEvent) => void> = [];
+    const registeredInputHooks: InputHook[] = [];
+    const registeredTypedEvents: Array<{ event: string; handler: (e: AgentEvent) => void }> = [];
     const registeredToolNames: string[] = [];
 
     // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -259,6 +306,14 @@ export class Agent {
 
       unregisterTool: (name: string): boolean => {
         return this.unregisterTool(name);
+      },
+
+      getActiveTools: (): string[] => {
+        return this.getActiveTools();
+      },
+
+      setActiveTools: (names: string[]): void => {
+        this.setActiveTools(names);
       },
 
       on: ((event: string, hook: unknown): (() => void) => {
@@ -295,6 +350,33 @@ export class Agent {
               this.listeners.delete(listener);
             };
           }
+          case "input": {
+            const h = hook as InputHook;
+            this.inputHooks.push(h);
+            registeredInputHooks.push(h);
+            return () => {
+              this.inputHooks = this.inputHooks.filter((x) => x !== h);
+            };
+          }
+          // Typed event subscriptions
+          case "agent_start":
+          case "agent_end":
+          case "turn_start":
+          case "turn_end":
+          case "message_start":
+          case "message_end":
+          case "tool_execution_start":
+          case "tool_execution_end": {
+            const handler = hook as (e: AgentEvent) => void;
+            if (!this.typedEventHandlers.has(event)) {
+              this.typedEventHandlers.set(event, new Set());
+            }
+            this.typedEventHandlers.get(event)!.add(handler);
+            registeredTypedEvents.push({ event, handler });
+            return () => {
+              this.typedEventHandlers.get(event)?.delete(handler);
+            };
+          }
           default:
             throw new Error(`Unknown event: ${event}`);
         }
@@ -306,6 +388,37 @@ export class Agent {
 
       followUp: (message: AgentMessage): void => {
         this.followUp(message);
+      },
+
+      sendUserMessage: (
+        content: string | (TextContent | ImageContent)[],
+        options?: { deliverAs?: "steer" | "followUp" }
+      ): void => {
+        const userContent =
+          typeof content === "string" ? [{ type: "text" as const, text: content }] : content;
+        const msg: AgentMessage = {
+          role: "user",
+          content: userContent,
+          timestamp: Date.now(),
+        };
+        const deliverAs = options?.deliverAs ?? "followUp";
+        if (deliverAs === "steer") {
+          this.steer(msg);
+        } else {
+          this.followUp(msg);
+        }
+      },
+
+      setModel: (model: LanguageModel): void => {
+        this._state.model = model;
+      },
+
+      getThinkingLevel: (): ThinkingLevel => {
+        return this._state.thinkingLevel;
+      },
+
+      setThinkingLevel: (level: ThinkingLevel): void => {
+        this._state.thinkingLevel = level;
       },
     } as ExtensionAPI;
 
@@ -324,6 +437,12 @@ export class Agent {
       }
       for (const listener of registeredEventListeners) {
         this.listeners.delete(listener);
+      }
+      for (const h of registeredInputHooks) {
+        this.inputHooks = this.inputHooks.filter((x) => x !== h);
+      }
+      for (const { event, handler } of registeredTypedEvents) {
+        this.typedEventHandlers.get(event)?.delete(handler);
       }
       for (const name of registeredToolNames) {
         this.unregisterTool(name);
@@ -370,6 +489,17 @@ export class Agent {
     if (Array.isArray(input)) {
       msgs = input;
     } else if (typeof input === "string") {
+      // Run input hooks for string input (before setting runningPrompt so
+      // a "handled" result avoids setting isStreaming etc.)
+      if (this.inputHooks.length > 0) {
+        const hookResult = await this.runInputHooks(input, images);
+        if (hookResult === null) {
+          return;
+        }
+        input = hookResult.text;
+        images = hookResult.images;
+      }
+
       const content: Array<TextContent | ImageContent> = [{ type: "text", text: input }];
       if (images && images.length > 0) {
         content.push(...images);
@@ -405,6 +535,13 @@ export class Agent {
     await this._runLoop(undefined);
   }
 
+  private getToolsForContext(): AgentTool[] {
+    if (!this._activeTools) {
+      return this._state.tools;
+    }
+    return this._state.tools.filter((t) => this._activeTools!.has(t.name));
+  }
+
   private async _runLoop(messages?: AgentMessage[]): Promise<void> {
     const model = this._state.model;
     if (!model) throw new Error("No model configured");
@@ -423,7 +560,7 @@ export class Agent {
     const context: AgentContext = {
       systemPrompt: this._state.systemPrompt,
       messages: this._state.messages.slice(),
-      tools: this._state.tools,
+      tools: this.getToolsForContext(),
     };
 
     // Build chained transformContext
@@ -624,8 +761,16 @@ export class Agent {
   }
 
   private emit(e: AgentEvent): void {
+    // Global listeners
     for (const listener of this.listeners) {
       listener(e);
+    }
+    // Typed event handlers
+    const handlers = this.typedEventHandlers.get(e.type);
+    if (handlers) {
+      for (const handler of handlers) {
+        handler(e);
+      }
     }
   }
 }
