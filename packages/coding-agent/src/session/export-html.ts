@@ -8,6 +8,13 @@ interface ToolParameterSchema {
   required?: string[];
 }
 
+interface ToolParameterRow {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string | null;
+}
+
 export interface ExportSessionOptions {
   outputPath?: string;
   systemPrompt?: string;
@@ -57,7 +64,7 @@ function toToolParameterSchema(parameters: unknown): ToolParameterSchema | null 
 
 function getParameterType(value: unknown): string {
   if (!value || typeof value !== "object") return "any";
-  const v = value as { type?: unknown };
+  const v = value as { type?: unknown; anyOf?: unknown[]; oneOf?: unknown[] };
 
   if (typeof v.type === "string") return v.type;
   if (Array.isArray(v.type)) {
@@ -65,21 +72,81 @@ function getParameterType(value: unknown): string {
     if (parts.length > 0) return parts.join("|");
   }
 
+  const unionTypes = Array.isArray(v.anyOf) ? v.anyOf : Array.isArray(v.oneOf) ? v.oneOf : null;
+  if (unionTypes) {
+    const parts = unionTypes
+      .map((option) => getParameterType(option))
+      .filter((part) => part !== "any");
+    if (parts.length > 0) return parts.join("|");
+  }
+
   return "any";
 }
 
-function formatToolParameters(parameters: unknown): string {
+function getParameterDescription(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as { description?: unknown };
+  if (typeof v.description !== "string") return null;
+  const trimmed = v.description.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function getToolParameterRows(parameters: unknown): ToolParameterRow[] {
   const schema = toToolParameterSchema(parameters);
   if (!schema?.properties || Object.keys(schema.properties).length === 0) {
-    return "(no parameters)";
+    return [];
   }
 
   const required = new Set(Array.isArray(schema.required) ? schema.required : []);
-  const fields = Object.entries(schema.properties).map(([name, value]) => {
-    const optionalMark = required.has(name) ? "" : "?";
-    return `${name}${optionalMark}: ${getParameterType(value)}`;
+  return Object.entries(schema.properties).map(([name, value]) => {
+    return {
+      name,
+      type: getParameterType(value),
+      required: required.has(name),
+      description: getParameterDescription(value),
+    };
+  });
+}
+
+function formatToolParameters(parameters: unknown): string {
+  const rows = getToolParameterRows(parameters);
+  if (rows.length === 0) {
+    return "(no parameters)";
+  }
+
+  const fields = rows.map((row) => {
+    const optionalMark = row.required ? "" : "?";
+    return `${row.name}${optionalMark}: ${row.type}`;
   });
   return `{ ${fields.join(", ")} }`;
+}
+
+function renderToolParameterDetails(parameters: unknown): string {
+  const rows = getToolParameterRows(parameters);
+  if (rows.length === 0) return "";
+
+  const items = rows
+    .map((row) => {
+      const requiredClass = row.required ? "required" : "optional";
+      const requiredText = row.required ? "required" : "optional";
+      const descriptionHtml = row.description
+        ? `<span class="tool-param-description">${escapeHtml(row.description)}</span>`
+        : "";
+      return `<li class="tool-param-item">
+  <code>${escapeHtml(row.name)}</code>
+  <span class="tool-param-type">${escapeHtml(row.type)}</span>
+  <span class="tool-param-required ${requiredClass}">${escapeHtml(requiredText)}</span>
+  ${descriptionHtml}
+</li>`;
+    })
+    .join("\n");
+
+  return `<details class="tool-param-details">
+  <summary>input schema</summary>
+  <ul class="tool-param-list">
+${items}
+  </ul>
+</details>`;
 }
 
 function renderMessageContent(content: unknown): string {
@@ -170,9 +237,10 @@ function renderToolsSection(tools: ToolInfo[]): string {
   const items = tools
     .map((tool) => {
       const paramText = formatToolParameters(tool.parameters);
+      const paramDetails = renderToolParameterDetails(tool.parameters);
       return `<li><strong>${escapeHtml(tool.name)}</strong> - ${escapeHtml(tool.description)}<br /><code>${escapeHtml(
         paramText
-      )}</code></li>`;
+      )}</code>${paramDetails}</li>`;
     })
     .join("\n");
 
@@ -216,6 +284,14 @@ function renderHtml(
     .thinking { color: #9db0c3; }
     code { color: #bde0ff; }
     details { margin: 6px 0; }
+    .tool-param-details { margin-top: 8px; }
+    .tool-param-list { margin: 8px 0 0; padding-left: 20px; }
+    .tool-param-item { margin-bottom: 6px; }
+    .tool-param-type { margin-left: 8px; color: #9db0c3; }
+    .tool-param-required { margin-left: 8px; font-size: 12px; padding: 2px 6px; border-radius: 999px; }
+    .tool-param-required.required { background: #15381f; color: #8ef0ad; }
+    .tool-param-required.optional { background: #2a3340; color: #c7d2de; }
+    .tool-param-description { display: block; margin-top: 4px; color: #9db0c3; }
     a { color: #8dd0ff; }
   </style>
 </head>

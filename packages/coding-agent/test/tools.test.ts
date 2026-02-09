@@ -2,6 +2,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { editTool } from "../src/tools/edit.js";
 import { grepTool } from "../src/tools/grep.js";
+import { bashTool } from "../src/tools/bash.js";
 import { lsTool } from "../src/tools/ls.js";
 import { readFileTool } from "../src/tools/read-file.js";
 import { writeFileTool } from "../src/tools/write-file.js";
@@ -11,6 +12,24 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const TEST_DIR = join(tmpdir(), `agentik-tools-test-${Date.now()}`);
+
+async function withEmptyPath(run: () => Promise<void>) {
+  const emptyBinPath = join(TEST_DIR, "empty-bin");
+  mkdirSync(emptyBinPath, { recursive: true });
+
+  const originalPath = process.env.PATH;
+  process.env.PATH = emptyBinPath;
+
+  try {
+    await run();
+  } finally {
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
+  }
+}
 
 beforeEach(() => {
   mkdirSync(TEST_DIR, { recursive: true });
@@ -250,6 +269,43 @@ describe("grepTool", () => {
         path: join(TEST_DIR, "nonexistent"),
       })
     ).rejects.toThrow("Path not found");
+  });
+
+  test("returns actionable error when rg is missing", async () => {
+    await withEmptyPath(async () => {
+      await expect(
+        grepTool.execute("tc8", {
+          pattern: "foo",
+          path: TEST_DIR,
+        })
+      ).rejects.toThrow("Missing required command: rg");
+    });
+  });
+});
+
+// ============================================================================
+// Bash Tool
+// ============================================================================
+
+describe("bashTool", () => {
+  test("returns explicit guidance when rg is missing", async () => {
+    await withEmptyPath(async () => {
+      const result = await bashTool.execute("tc1", { command: "rg foo ." });
+
+      expect(result.details?.exitCode).toBe(127);
+      expect(result.content[0].text).toContain("Missing required command: rg");
+      expect(result.content[0].text).toContain("brew install ripgrep");
+    });
+  });
+
+  test("returns explicit guidance when fd is missing", async () => {
+    await withEmptyPath(async () => {
+      const result = await bashTool.execute("tc2", { command: "fd foo ." });
+
+      expect(result.details?.exitCode).toBe(127);
+      expect(result.content[0].text).toContain("Missing required command: fd");
+      expect(result.content[0].text).toContain("apt install fd-find");
+    });
   });
 });
 

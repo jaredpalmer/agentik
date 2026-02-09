@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { resolve, isAbsolute, relative, basename } from "node:path";
+import { requireToolBinary } from "./tool-binary.js";
 
 const parameters = z.object({
   pattern: z.string().describe("Search pattern (regex or literal string)"),
@@ -74,6 +75,7 @@ export const grepTool: AgentTool<GrepParams, GrepToolDetails | undefined> = {
       }
       return basename(filePath);
     };
+    const rgBinary = requireToolBinary("rg");
 
     return new Promise((resolve, reject) => {
       const args: string[] = ["--json", "--line-number", "--color=never", "--hidden"];
@@ -83,7 +85,7 @@ export const grepTool: AgentTool<GrepParams, GrepToolDetails | undefined> = {
       if (params.glob) args.push("--glob", params.glob);
       args.push(params.pattern, searchPath);
 
-      const child = spawn("rg", args, { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(rgBinary, args, { stdio: ["ignore", "pipe", "pipe"] });
       let stderr = "";
       let matchCount = 0;
       let matchLimitReached = false;

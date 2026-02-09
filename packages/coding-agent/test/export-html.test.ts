@@ -53,8 +53,8 @@ describe("exportSessionToHtml", () => {
           name: "read_file",
           description: "Read a file from disk",
           parameters: z.object({
-            path: z.string(),
-            offset: z.number().optional(),
+            path: z.string().describe("Absolute or relative file path"),
+            offset: z.number().optional().describe("Line number offset"),
           }),
         },
       ];
@@ -74,8 +74,55 @@ describe("exportSessionToHtml", () => {
       expect(html).toContain("You are a coding assistant.");
       expect(html).toContain("read_file");
       expect(html).toContain("path");
+      expect(html).toContain("input schema");
+      expect(html).toContain("required");
+      expect(html).toContain("optional");
+      expect(html).toContain("Absolute or relative file path");
+      expect(html).toContain("Line number offset");
       expect(html).toContain("Please read src/index.ts");
       expect(html).toContain("Sure, I&#39;ll inspect that file.");
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should keep no-parameter tools behavior unchanged", () => {
+    const rootDir = makeTempDir();
+
+    try {
+      const store = new SessionStore({
+        cwd: process.cwd(),
+        provider: "anthropic",
+        model: "claude-opus-4-6",
+        rootDir,
+      });
+
+      store.appendMessage({
+        role: "user",
+        content: "List active tools",
+        timestamp: Date.now(),
+      });
+      store.appendMessage(makeAssistantMessage("No tool arguments needed here."));
+
+      const tools: ToolInfo[] = [
+        {
+          name: "ping",
+          description: "Health check",
+          parameters: z.object({}),
+        },
+      ];
+
+      const outputPath = join(rootDir, "no-params-export.html");
+      const exportedPath = exportSessionToHtml(store.getSessionFile(), {
+        outputPath,
+        tools,
+      });
+
+      expect(exportedPath).toBe(outputPath);
+      const html = readFileSync(exportedPath, "utf8");
+      expect(html).toContain("ping");
+      expect(html).toContain("(no parameters)");
+      expect(html).not.toContain("input schema");
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }

@@ -95,6 +95,9 @@ export interface CodingExtensionAPI extends ExtensionAPI {
 
   /** Shared event bus for inter-extension communication. */
   readonly events: EventBus;
+
+  /** Trigger extension runtime reload. */
+  reload(): Promise<void>;
 }
 
 /** Options for creating a CodingExtensionAPI wrapper. */
@@ -108,6 +111,7 @@ export interface CodingExtensionAPIOptions {
   messageRendererRegistry: import("./message-renderer.js").MessageRendererRegistry;
   eventBus: EventBus;
   onAppendEntry?: <T = unknown>(customType: string, data?: T) => void;
+  onReload?: () => Promise<void> | void;
 }
 
 /**
@@ -125,6 +129,7 @@ export function createCodingExtensionAPI(options: CodingExtensionAPIOptions): Co
     messageRendererRegistry,
     eventBus,
     onAppendEntry,
+    onReload,
   } = options;
 
   return {
@@ -169,6 +174,10 @@ export function createCodingExtensionAPI(options: CodingExtensionAPIOptions): Co
 
     appendEntry(customType, data) {
       onAppendEntry?.(customType, data);
+    },
+
+    async reload() {
+      await onReload?.();
     },
   };
 }

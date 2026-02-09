@@ -1,6 +1,11 @@
 import { z } from "zod";
 import type { AgentTool } from "@agentik/agent";
 import { execFile } from "node:child_process";
+import {
+  detectCommandToolUsage,
+  findMissingToolBinaries,
+  formatMissingToolBinaryMessage,
+} from "./tool-binary.js";
 
 const parameters = z.object({
   command: z.string().describe("The bash command to execute"),
@@ -8,6 +13,7 @@ const parameters = z.object({
 });
 
 type BashParams = z.infer<typeof parameters>;
+const CHECKED_TOOL_BINARIES = ["rg", "fd"] as const;
 
 export const bashTool: AgentTool<BashParams, { exitCode: number }> = {
   name: "bash",
@@ -16,6 +22,19 @@ export const bashTool: AgentTool<BashParams, { exitCode: number }> = {
   parameters,
   async execute(_toolCallId, params, signal) {
     const timeout = params.timeout ?? 30000;
+    const referencedBinaries = detectCommandToolUsage(params.command, CHECKED_TOOL_BINARIES);
+    const missingBinaries = findMissingToolBinaries(referencedBinaries);
+
+    if (missingBinaries.length > 0) {
+      const message = missingBinaries
+        .map((binary) => formatMissingToolBinaryMessage(binary))
+        .join("\n");
+
+      return {
+        content: [{ type: "text", text: message }],
+        details: { exitCode: 127 },
+      };
+    }
 
     return new Promise((resolve) => {
       const proc = execFile("/bin/bash", ["-c", params.command], {

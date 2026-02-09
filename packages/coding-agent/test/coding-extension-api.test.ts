@@ -188,6 +188,42 @@ describe("CodingExtensionAPI", () => {
     });
   });
 
+  it("should invoke reload callback via CodingExtensionAPI", async () => {
+    let reloadCalls = 0;
+
+    const model = createMockModel([{ text: "hi" }]);
+    const agent = new Agent({ initialState: { model } });
+
+    let coreApi: import("@agentik/agent").ExtensionAPI | undefined;
+    const ext: Extension = (api) => {
+      coreApi = api;
+    };
+    agent.use(ext);
+
+    const codingApi = createCodingExtensionAPI({
+      coreApi: coreApi!,
+      ui: new NoopUIContext(),
+      commandRegistry: new CommandRegistry(),
+      flagRegistry: new FlagRegistry(),
+      shortcutRegistry: new ShortcutRegistry(),
+      providerRegistry: new ProviderRegistry(),
+      messageRendererRegistry: new MessageRendererRegistry(),
+      eventBus: createEventBus(),
+      onReload: async () => {
+        reloadCalls += 1;
+      },
+    });
+
+    await codingApi.reload();
+    expect(reloadCalls).toBe(1);
+  });
+
+  it("should no-op reload when callback is not provided", async () => {
+    const { codingApi } = createTestAPI();
+    await codingApi.reload();
+    expect(true).toBe(true);
+  });
+
   it("should expose event bus", () => {
     const { codingApi } = createTestAPI();
     let received: unknown;

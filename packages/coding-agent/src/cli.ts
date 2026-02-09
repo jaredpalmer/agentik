@@ -11,6 +11,7 @@ import { toolLogger } from "./extensions/tool-logger.js";
 import { contextInfo } from "./extensions/context-info.js";
 import { SessionStore } from "./session/store.js";
 import { TuiApp } from "./tui/app.js";
+import { parseCliArgs } from "./cli/args.js";
 
 // ============================================================================
 // Model Setup
@@ -72,6 +73,11 @@ function formatError(err: unknown): string {
 // ============================================================================
 
 async function main() {
+  const cliArgs = parseCliArgs(process.argv.slice(2));
+  for (const warning of cliArgs.warnings) {
+    console.warn(`Warning: ${warning}`);
+  }
+
   const provider = process.env.AGENTIK_PROVIDER ?? "anthropic";
   const modelId = process.env.AGENTIK_MODEL ?? DEFAULT_MODEL;
   const model = await createModel();
@@ -86,7 +92,7 @@ Current working directory: ${process.cwd()}`,
     },
   });
 
-  // Register extensions
+  // Register built-in extensions.
   agent.use(bashGuard());
   agent.use(toolLogger());
   agent.use(contextInfo({ cwd: process.cwd() }));
