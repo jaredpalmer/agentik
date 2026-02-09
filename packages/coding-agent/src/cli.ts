@@ -9,6 +9,7 @@ import { codingTools } from "./tools/index.js";
 import { bashGuard } from "./extensions/bash-guard.js";
 import { toolLogger } from "./extensions/tool-logger.js";
 import { contextInfo } from "./extensions/context-info.js";
+import { SessionStore } from "./session/store.js";
 import { TuiApp } from "./tui/app.js";
 
 // ============================================================================
@@ -90,11 +91,18 @@ Current working directory: ${process.cwd()}`,
   agent.use(toolLogger());
   agent.use(contextInfo({ cwd: process.cwd() }));
 
+  const sessionStore = new SessionStore({
+    cwd: process.cwd(),
+    provider,
+    model: modelId,
+  });
+
   const app = new TuiApp({
     agent,
     provider,
     modelId,
     toolNames: codingTools.map((t) => t.name),
+    sessionStore,
   });
 
   await app.start();

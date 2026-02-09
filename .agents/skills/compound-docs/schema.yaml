@@ -1,19 +1,15 @@
-# Agentik Documentation Schema
+# CORA Documentation Schema
 # This schema MUST be validated before writing any documentation file
 
 required_fields:
   module:
     type: string
-    description: "Module/area of agentik (e.g., 'Agent Loop', 'Event Stream', 'Coding Tools')"
+    description: "Module/area of CORA (e.g., 'Email Processing', 'Brief System', 'Authentication')"
     examples:
-      - "Agent Loop"
-      - "Event Stream"
-      - "Agent Class"
-      - "Type System"
-      - "Coding Tools"
-      - "CLI/TUI"
-      - "AI SDK Integration"
-      - "Build/Tooling"
+      - "Email Processing"
+      - "Brief System"
+      - "Assistant"
+      - "Authentication"
 
   date:
     type: string
@@ -23,40 +19,42 @@ required_fields:
   problem_type:
     type: enum
     values:
-      - build_error          # Bun build, bundling, compilation errors
+      - build_error          # Rails, bundle, compilation errors
       - test_failure         # Test failures, flaky tests
       - runtime_error        # Exceptions, crashes during execution
-      - type_error           # TypeScript type errors, declaration issues
-      - streaming_issue      # AI SDK streaming, event ordering, backpressure
-      - tool_execution_issue # Tool invocation, parameter validation, result handling
-      - ai_sdk_integration   # AI SDK API usage, provider config, model calls
-      - performance_issue    # Slow operations, memory issues, event throughput
-      - config_error         # Configuration, environment, workspace issues
-      - dependency_issue     # Package resolution, version conflicts, workspace deps
-      - logic_error          # Algorithm/business logic bugs
-      - developer_experience # DX issues: workflow, tooling, dev setup
+      - performance_issue    # Slow queries, memory issues, N+1 queries
+      - database_issue       # Migration, query, schema problems
+      - security_issue       # Authentication, authorization, XSS, SQL injection
+      - ui_bug               # Frontend, Stimulus, Turbo issues
+      - integration_issue    # External service, API integration problems
+      - logic_error          # Business logic bugs
+      - developer_experience # DX issues: workflow, tooling, seed data, dev setup
+      - workflow_issue       # Development process, missing steps, unclear practices
+      - best_practice        # Documenting patterns and practices to follow
       - documentation_gap    # Missing or inadequate documentation
     description: "Primary category of the problem"
 
   component:
     type: enum
     values:
-      - agent_loop           # Core agent loop (streamText, tool dispatch, abort)
-      - agent_class          # Agent class, configuration, lifecycle
-      - event_stream         # Event types, event emission, streaming
-      - type_system          # TypeScript types, generics, declaration merging
-      - message_conversion   # Message format conversion, AI SDK message types
-      - tool_bash            # Bash/shell tool execution
-      - tool_edit            # File edit tool (fuzzy matching, diff)
-      - tool_grep            # Grep/search tool
-      - tool_file_io         # read_file, write_file, glob, ls tools
-      - ai_sdk_stream        # AI SDK streamText, streaming protocols
-      - provider_config      # Model provider configuration, API keys
-      - zod_schemas          # Zod schema definitions, validation
-      - cli_tui              # CLI interface, terminal UI
-      - build_tooling        # Bun build, oxlint, oxfmt, lefthook
-      - testing              # Test setup, test utilities, bun:test
-    description: "Agentik component involved"
+      - rails_model          # ActiveRecord models
+      - rails_controller     # ActionController
+      - rails_view           # ERB templates, ViewComponent
+      - service_object       # Custom service classes
+      - background_job       # Sidekiq, Active Job
+      - database             # PostgreSQL, migrations, schema
+      - frontend_stimulus    # Stimulus JS controllers
+      - hotwire_turbo        # Turbo Streams, Turbo Drive
+      - email_processing     # Email handling, mailers
+      - brief_system         # Brief generation, summarization
+      - assistant            # AI assistant, prompts
+      - authentication       # Devise, user auth
+      - payments             # Stripe, billing
+      - development_workflow # Dev process, seed data, tooling
+      - testing_framework    # Test setup, fixtures, VCR
+      - documentation        # README, guides, inline docs
+      - tooling              # Scripts, generators, CLI tools
+    description: "CORA component involved"
 
   symptoms:
     type: array[string]
@@ -64,43 +62,45 @@ required_fields:
     max_items: 5
     description: "Observable symptoms (error messages, visual issues, crashes)"
     examples:
-      - "Type error: Property 'x' does not exist on type 'Y'"
-      - "streamText events arriving out of order"
-      - "Tool execution hangs on abort signal"
+      - "N+1 query detected in brief generation"
+      - "Brief emails not appearing in summary"
+      - "Turbo Stream response returns 404"
 
   root_cause:
     type: enum
     values:
-      - type_mismatch          # TypeScript type incompatibility
-      - missing_type_assertion  # Missing 'as' cast or type guard
-      - declaration_merge_error # Interface/declaration merging conflict
-      - zod_schema_error        # Zod schema definition or validation bug
-      - ai_sdk_api_change       # AI SDK API breaking change or misuse
-      - stream_event_ordering   # Incorrect stream event sequence
-      - async_timing            # Async/await timing, race condition
-      - abort_signal_handling   # AbortController/signal lifecycle issue
-      - subprocess_error        # Child process spawn, stdin/stdout issue
-      - config_error            # Configuration or environment issue
-      - logic_error             # Algorithm/business logic bug
-      - message_format_error    # Message conversion or format mismatch
-      - missing_null_check      # Missing null/undefined guard
-      - encoding_issue          # Text encoding, BOM, CRLF issue
-      - workspace_resolution    # Bun workspace package resolution issue
-      - dependency_version_mismatch # Version conflict between packages
+      - missing_association  # Incorrect Rails associations
+      - missing_include      # Missing eager loading (N+1)
+      - missing_index        # Database performance issue
+      - wrong_api            # Using deprecated/incorrect Rails API
+      - scope_issue          # Incorrect query scope or filtering
+      - thread_violation     # Real-time unsafe operation
+      - async_timing         # Async/background job timing
+      - memory_leak          # Memory leak or excessive allocation
+      - config_error         # Configuration or environment issue
+      - logic_error          # Algorithm/business logic bug
+      - test_isolation       # Test isolation or fixture issue
+      - missing_validation   # Missing model validation
+      - missing_permission   # Authorization check missing
+      - missing_workflow_step # Skipped or undocumented workflow step
+      - inadequate_documentation # Missing or unclear documentation
+      - missing_tooling      # Lacking helper scripts or automation
+      - incomplete_setup     # Missing seed data, fixtures, or config
     description: "Fundamental cause of the problem"
 
   resolution_type:
     type: enum
     values:
       - code_fix             # Fixed by changing source code
-      - type_fix             # Fixed by correcting types/generics/assertions
+      - migration            # Fixed by database migration
       - config_change        # Fixed by changing configuration
       - test_fix             # Fixed by correcting tests
-      - dependency_update    # Fixed by updating package/dependency
-      - schema_fix           # Fixed by correcting Zod schema
+      - dependency_update    # Fixed by updating gem/dependency
       - environment_setup    # Fixed by environment configuration
+      - workflow_improvement # Improved development workflow or process
       - documentation_update # Added or updated documentation
       - tooling_addition     # Added helper script or automation
+      - seed_data_update     # Updated db/seeds.rb or fixtures
     description: "Type of fix applied"
 
   severity:
@@ -113,19 +113,10 @@ required_fields:
     description: "Impact severity"
 
 optional_fields:
-  bun_version:
+  rails_version:
     type: string
     pattern: '^\d+\.\d+\.\d+$'
-    description: "Bun version where this was encountered (e.g., '1.2.4')"
-
-  ai_sdk_version:
-    type: string
-    pattern: '^\d+\.\d+\.\d+$'
-    description: "AI SDK version where this was encountered (e.g., '6.0.72')"
-
-  package:
-    type: string
-    description: "Which package was affected (e.g., '@agentik/agent', '@agentik/coding-agent')"
+    description: "Rails version where this was encountered (e.g., '7.1.0')"
 
   related_components:
     type: array[string]
@@ -136,13 +127,13 @@ optional_fields:
     max_items: 8
     description: "Searchable keywords (lowercase, hyphen-separated)"
     examples:
-      - "stream-event"
-      - "type-error"
-      - "zod-schema"
-      - "abort-signal"
+      - "n-plus-one"
+      - "eager-loading"
+      - "test-isolation"
+      - "turbo-stream"
 
 validation_rules:
-  - "module must be a valid agentik module name"
+  - "module must be a valid CORA module name"
   - "date must be in YYYY-MM-DD format"
   - "problem_type must match one of the enum values"
   - "component must match one of the enum values"
@@ -154,35 +145,32 @@ validation_rules:
 
 # Example valid front matter:
 # ---
-# module: Agent Loop
-# date: 2025-12-01
-# problem_type: streaming_issue
-# component: ai_sdk_stream
+# module: Email Processing
+# date: 2025-11-12
+# problem_type: performance_issue
+# component: rails_model
 # symptoms:
-#   - "streamText tool-result events arriving before tool-call events"
-#   - "Agent loop processes stale tool results"
-# root_cause: stream_event_ordering
-# ai_sdk_version: 6.0.72
-# package: "@agentik/agent"
+#   - N+1 query when loading email threads
+#   - Brief generation taking >5 seconds
+# root_cause: missing_include
+# rails_version: 7.1.2
 # resolution_type: code_fix
 # severity: high
-# tags: [stream-event, tool-call, ordering]
+# tags: [n-plus-one, eager-loading, performance]
 # ---
 #
-# Example type error front matter:
+# Example DX issue front matter:
 # ---
-# module: Type System
-# date: 2025-12-02
-# problem_type: type_error
-# component: type_system
+# module: Development Workflow
+# date: 2025-11-13
+# problem_type: developer_experience
+# component: development_workflow
 # symptoms:
-#   - "TS2345: Argument of type 'ToolSet' is not assignable to parameter"
-#   - "Generic constraint not satisfied in Agent<Tools>"
-# root_cause: type_mismatch
-# bun_version: 1.2.4
-# ai_sdk_version: 6.0.72
-# package: "@agentik/agent"
-# resolution_type: type_fix
-# severity: medium
-# tags: [typescript, generics, tool-set]
+#   - No example data for new feature in development
+#   - Rails db:seed doesn't demonstrate new capabilities
+# root_cause: incomplete_setup
+# rails_version: 7.1.2
+# resolution_type: seed_data_update
+# severity: low
+# tags: [seed-data, dx, workflow]
 # ---

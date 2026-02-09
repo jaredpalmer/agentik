@@ -8,13 +8,13 @@ Use this template when adding a pattern to `docs/solutions/patterns/critical-pat
 
 ### ❌ WRONG ([Will cause X error])
 
-```typescript
+```[language]
 [code showing wrong approach]
 ```
 
 ### ✅ CORRECT
 
-```typescript
+```[language]
 [code showing correct approach]
 ```
 

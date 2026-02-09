@@ -148,6 +148,12 @@ export interface AgentTool<TParams = any, TDetails = any> {
   ) => Promise<AgentToolResult<TDetails>>;
 }
 
+export interface ToolInfo {
+  name: string;
+  description: string;
+  parameters: z.ZodType;
+}
+
 // ============================================================================
 // Agent Context
 // ============================================================================
@@ -304,6 +310,7 @@ export interface ExtensionAPI {
   registerTool(tool: AgentTool): () => void;
   unregisterTool(name: string): boolean;
   getActiveTools(): string[];
+  getAllTools(): ToolInfo[];
   setActiveTools(names: string[]): void;
 
   // Existing hooks

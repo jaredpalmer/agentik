@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(done)",
+      "Bash(tree:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:mariozechner.at)",
+      "WebFetch(domain:deepwiki.com)"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}

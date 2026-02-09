@@ -19,7 +19,7 @@ preconditions:
 
 This skill captures problem solutions immediately after confirmation, creating structured documentation that serves as a searchable knowledge base for future sessions.
 
-**Organization:** Single-file architecture - each problem documented as one markdown file in its symptom category directory (e.g., `docs/solutions/streaming-issues/event-ordering-agent-loop.md`). Files use YAML frontmatter for metadata and searchability.
+**Organization:** Single-file architecture - each problem documented as one markdown file in its symptom category directory (e.g., `docs/solutions/performance-issues/n-plus-one-briefs.md`). Files use YAML frontmatter for metadata and searchability.
 
 ---
 
@@ -70,20 +70,19 @@ Extract from conversation history:
 
 **Environment details:**
 
-- Bun version
-- AI SDK version
-- Package affected
+- Rails version
+- Stage (0-6 or post-implementation)
 - OS version
 - File/line references
 
-**BLOCKING REQUIREMENT:** If critical context is missing (module name, exact error, or resolution steps), ask user and WAIT for response before proceeding to Step 3:
+**BLOCKING REQUIREMENT:** If critical context is missing (module name, exact error, stage, or resolution steps), ask user and WAIT for response before proceeding to Step 3:
 
 ```
 I need a few details to document this properly:
 
-1. Which module had this issue? [e.g., Agent Loop, Event Stream, Coding Tools]
+1. Which module had this issue? [ModuleName]
 2. What was the exact error message or symptom?
-3. Which package was affected? [@agentik/agent, @agentik/coding-agent]
+3. What stage were you in? (0-6 or post-implementation)
 
 [Continue after user provides details]
 ```
@@ -139,9 +138,9 @@ Format: `[sanitized-symptom]-[module]-[YYYYMMDD].md`
 
 **Examples:**
 
-- `stream-event-ordering-AgentLoop-20251201.md`
-- `type-mismatch-toolset-TypeSystem-20251202.md`
-- `edit-fuzzy-match-failure-CodingTools-20251203.md`
+- `missing-include-BriefSystem-20251110.md`
+- `parameter-not-saving-state-EmailProcessing-20251110.md`
+- `webview-crash-on-resize-Assistant-20251110.md`
   </step>
 
 <step number="5" required="true" depends_on="4" blocking="true">
@@ -175,7 +174,7 @@ Please provide corrected values.
 <step number="6" required="true" depends_on="5">
 ### Step 6: Create Documentation
 
-**Determine category from problem_type:** Use the category mapping defined in [yaml-schema.md](./references/yaml-schema.md).
+**Determine category from problem_type:** Use the category mapping defined in [yaml-schema.md](./references/yaml-schema.md) (lines 49-61).
 
 **Create documentation file:**
 
@@ -241,7 +240,7 @@ EOF
 If this issue has automatic indicators suggesting it might be critical:
 
 - Severity: `critical` in YAML
-- Affects multiple modules OR foundational component (agent_loop, type_system)
+- Affects multiple modules OR foundational stage (Stage 2 or 3)
 - Non-obvious solution
 
 Then in the decision menu (Step 8), add a note:
@@ -277,7 +276,7 @@ What's next?
 1. Continue workflow (recommended)
 2. Add to Required Reading - Promote to critical patterns (critical-patterns.md)
 3. Link related issues - Connect to similar problems
-4. Add to existing skill - Add to a learning skill (e.g., ai-sdk)
+4. Add to existing skill - Add to a learning skill (e.g., hotwire-native)
 5. Create new skill - Extract into new learning skill
 6. View documentation - See what was captured
 7. Other
@@ -296,7 +295,7 @@ User selects this when:
 
 - System made this mistake multiple times across different modules
 - Solution is non-obvious but must be followed every time
-- Foundational requirement (TypeScript types, AI SDK usage, streaming, etc.)
+- Foundational requirement (Rails, Rails API, threading, etc.)
 
 Action:
 
@@ -319,10 +318,15 @@ User selects this when the documented solution relates to an existing learning s
 
 Action:
 
-1. Prompt: "Which skill? (ai-sdk, etc.)"
+1. Prompt: "Which skill? (hotwire-native, etc.)"
 2. Determine which reference file to update (resources.md, patterns.md, or examples.md)
 3. Add link and brief description to appropriate section
 4. Confirm: "✓ Added to [skill-name] skill in [file]"
+
+Example: For Hotwire Native Tailwind variants solution:
+
+- Add to `hotwire-native/references/resources.md` under "Project-Specific Resources"
+- Add to `hotwire-native/references/examples.md` with link to solution doc
 
 **Option 5: Create new skill**
 
@@ -330,7 +334,7 @@ User selects this when the solution represents the start of a new learning domai
 
 Action:
 
-1. Prompt: "What should the new skill be called? (e.g., streaming-patterns, tool-development)"
+1. Prompt: "What should the new skill be called? (e.g., stripe-billing, email-processing)"
 2. Run `python3 .claude/skills/skill-creator/scripts/init_skill.py [skill-name]`
 3. Create initial reference files with this solution as first example
 4. Confirm: "✓ Created new [skill-name] skill with this solution as first example"
@@ -456,36 +460,35 @@ Documentation is successful when ALL of the following are true:
 
 ## Example Scenario
 
-**User:** "That worked! The streaming events are in the right order now."
+**User:** "That worked! The N+1 query is fixed."
 
 **Skill activates:**
 
 1. **Detect confirmation:** "That worked!" triggers auto-invoke
 2. **Gather context:**
-   - Module: Agent Loop
-   - Symptom: streamText tool-result events arriving before tool-call events, agent loop processes stale tool results
-   - Failed attempts: Added event buffering (didn't help), tried reordering in event handler
-   - Solution: Added sequence tracking to stream event processor, ensured tool-call is consumed before tool-result
-   - Root cause: AI SDK stream emits tool-result before the tool-call finish event when tool execution is fast
+   - Module: Brief System
+   - Symptom: Brief generation taking >5 seconds, N+1 query when loading email threads
+   - Failed attempts: Added pagination (didn't help), checked background job performance
+   - Solution: Added eager loading with `includes(:emails)` on Brief model
+   - Root cause: Missing eager loading causing separate database query per email thread
 3. **Check existing:** No similar issue found
-4. **Generate filename:** `stream-event-ordering-AgentLoop-20251201.md`
+4. **Generate filename:** `n-plus-one-brief-generation-BriefSystem-20251110.md`
 5. **Validate YAML:**
    ```yaml
-   module: Agent Loop
-   date: 2025-12-01
-   problem_type: streaming_issue
-   component: ai_sdk_stream
+   module: Brief System
+   date: 2025-11-10
+   problem_type: performance_issue
+   component: rails_model
    symptoms:
-     - "streamText tool-result events arriving before tool-call events"
-     - "Agent loop processes stale tool results"
-   root_cause: stream_event_ordering
-   ai_sdk_version: 6.0.72
+     - "N+1 query when loading email threads"
+     - "Brief generation taking >5 seconds"
+   root_cause: missing_include
    severity: high
-   tags: [stream-event, tool-call, ordering]
+   tags: [n-plus-one, eager-loading, performance]
    ```
    ✅ Valid
 6. **Create documentation:**
-   - `docs/solutions/streaming-issues/stream-event-ordering-AgentLoop-20251201.md`
+   - `docs/solutions/performance-issues/n-plus-one-brief-generation-BriefSystem-20251110.md`
 7. **Cross-reference:** None needed (no similar issues)
 
 **Output:**
@@ -494,13 +497,13 @@ Documentation is successful when ALL of the following are true:
 ✓ Solution documented
 
 File created:
-- docs/solutions/streaming-issues/stream-event-ordering-AgentLoop-20251201.md
+- docs/solutions/performance-issues/n-plus-one-brief-generation-BriefSystem-20251110.md
 
 What's next?
 1. Continue workflow (recommended)
 2. Add to Required Reading - Promote to critical patterns (critical-patterns.md)
 3. Link related issues - Connect to similar problems
-4. Add to existing skill - Add to a learning skill (e.g., ai-sdk)
+4. Add to existing skill - Add to a learning skill (e.g., hotwire-native)
 5. Create new skill - Extract into new learning skill
 6. View documentation - See what was captured
 7. Other
@@ -510,7 +513,7 @@ What's next?
 
 ## Future Enhancements
 
-**Potential:**
+**Not in Phase 7 scope, but potential:**
 
 - Search by date range
 - Filter by severity

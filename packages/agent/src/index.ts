@@ -30,6 +30,7 @@ export type {
   ThinkingContent,
   ThinkingBudgets,
   ThinkingLevel,
+  ToolInfo,
   ToolCall,
   ToolExecEndEvent,
   ToolExecStartEvent,

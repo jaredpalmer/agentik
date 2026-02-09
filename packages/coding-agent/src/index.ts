@@ -56,3 +56,13 @@ export {
   type SlashCommandInfo,
   type SlashCommandSource,
 } from "./commands/index.js";
+
+export {
+  SessionStore,
+  type SessionEntry,
+  type SessionHeader,
+  type SessionMessageEntry,
+  type SessionStoreOptions,
+  exportSessionToHtml,
+  type ExportSessionOptions,
+} from "./session/index.js";

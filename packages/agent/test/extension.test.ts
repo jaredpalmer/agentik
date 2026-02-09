@@ -50,6 +50,31 @@ describe("Extension system", () => {
     expect(agent.state.tools).toHaveLength(0);
   });
 
+  it("should expose all configured tools via extension API", () => {
+    const agent = new Agent({
+      initialState: { tools: [echoTool] },
+    });
+
+    let tools:
+      | Array<{
+          name: string;
+          description: string;
+          parameters: unknown;
+        }>
+      | undefined;
+
+    const ext: Extension = (api) => {
+      tools = api.getAllTools();
+    };
+
+    agent.use(ext);
+    expect(tools).toBeDefined();
+    expect(tools).toHaveLength(1);
+    expect(tools![0].name).toBe("echo");
+    expect(tools![0].description).toContain("Echo");
+    expect(typeof tools![0].parameters).toBe("object");
+  });
+
   it("should provide read-only state access to extensions", () => {
     const agent = new Agent({
       initialState: { systemPrompt: "test prompt" },

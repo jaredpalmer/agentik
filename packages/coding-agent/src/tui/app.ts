@@ -22,6 +22,8 @@ import type {
   AssistantMessageEvent,
   ThinkingLevel,
 } from "@agentik/agent";
+import { exportSessionToHtml } from "../session/export-html.js";
+import type { SessionStore } from "../session/store.js";
 import { colors, createSyntaxStyle, getThinkingBorderColor } from "./theme.js";
 
 interface TuiOptions {
@@ -29,6 +31,7 @@ interface TuiOptions {
   provider: string;
   modelId: string;
   toolNames: string[];
+  sessionStore: SessionStore;
 }
 
 interface MessageBlock {
@@ -103,6 +106,58 @@ interface ToolResult {
   details?: Record<string, unknown>;
 }
 
+interface ToolParameterSchema {
+  properties?: Record<string, unknown>;
+  required?: string[];
+}
+
+function toToolParameterSchema(parameters: unknown): ToolParameterSchema | null {
+  if (!parameters || typeof parameters !== "object") return null;
+
+  const withToJsonSchema = parameters as { toJSONSchema?: () => unknown };
+  if (typeof withToJsonSchema.toJSONSchema === "function") {
+    try {
+      const schema = withToJsonSchema.toJSONSchema();
+      if (schema && typeof schema === "object") {
+        return schema as ToolParameterSchema;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return parameters as ToolParameterSchema;
+}
+
+function getParameterType(value: unknown): string {
+  if (!value || typeof value !== "object") return "any";
+  const v = value as { type?: unknown };
+
+  if (typeof v.type === "string") return v.type;
+  if (Array.isArray(v.type) && v.type.length > 0) {
+    const parts = v.type.filter((t): t is string => typeof t === "string");
+    if (parts.length > 0) return parts.join("|");
+  }
+
+  return "any";
+}
+
+function summarizeToolParameters(parameters: unknown): string {
+  const schema = toToolParameterSchema(parameters);
+  if (!schema || !schema.properties || Object.keys(schema.properties).length === 0) {
+    return "(no parameters)";
+  }
+
+  const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+  const parts = Object.entries(schema.properties).map(([name, value]) => {
+    const optionalMark = required.has(name) ? "" : "?";
+    const type = getParameterType(value);
+    return `${name}${optionalMark}:${type}`;
+  });
+
+  return `{ ${parts.join(", ")} }`;
+}
+
 function getToolResultText(result: unknown): string {
   if (!result || typeof result !== "object") return "";
   const r = result as ToolResult;
@@ -145,6 +200,7 @@ export class TuiApp {
   private provider: string;
   private modelId: string;
   private toolNames: string[];
+  private sessionStore: SessionStore;
   private syntaxStyle!: SyntaxStyle;
   private root!: BoxRenderable;
   private header!: TextRenderable;
@@ -170,6 +226,7 @@ export class TuiApp {
     this.provider = opts.provider;
     this.modelId = opts.modelId;
     this.toolNames = opts.toolNames;
+    this.sessionStore = opts.sessionStore;
   }
 
   async start(): Promise<void> {
@@ -358,7 +415,8 @@ ${dim("Enter send \u00b7 Ctrl+C cancel \u00b7 Ctrl+T thinking \u00b7 PgUp/PgDn s
     }
   }
 
-  private onMessageEnd(_message: AgentMessage): void {
+  private onMessageEnd(message: AgentMessage): void {
+    this.sessionStore.appendMessage(message);
     this.currentAssistant = null;
     this.currentThinking = null;
   }
@@ -557,14 +615,16 @@ ${dim("Enter send \u00b7 Ctrl+C cancel \u00b7 Ctrl+T thinking \u00b7 PgUp/PgDn s
       case "/clear":
         this.agent.clearMessages();
         this.clearChat();
-        this.addStatusMessage(t`${dim("Conversation cleared.")}`);
+        this.sessionStore.startNewSession();
+        this.addStatusMessage(t`${dim("Conversation cleared. Started a new session file.")}`);
         this.textarea.focus();
         return true;
 
       case "/reset":
         this.agent.reset();
         this.clearChat();
-        this.addStatusMessage(t`${dim("Agent reset.")}`);
+        this.sessionStore.startNewSession();
+        this.addStatusMessage(t`${dim("Agent reset. Started a new session file.")}`);
         this.textarea.focus();
         return true;
 
@@ -599,6 +659,16 @@ ${dim("Enter send \u00b7 Ctrl+C cancel \u00b7 Ctrl+T thinking \u00b7 PgUp/PgDn s
         this.textarea.focus();
         return true;
 
+      case "/export":
+        void this.handleExportCommand(arg);
+        this.textarea.focus();
+        return true;
+
+      case "/tools":
+        this.showToolsInfo();
+        this.textarea.focus();
+        return true;
+
       default:
         return false;
     }
@@ -613,6 +683,8 @@ ${dim("Enter send \u00b7 Ctrl+C cancel \u00b7 Ctrl+T thinking \u00b7 PgUp/PgDn s
       "  /thinking [lvl]  Set thinking level (off/minimal/low/medium/high/xhigh)",
       "  /toggleThinking  Hide/show thinking blocks",
       "  /session         Show session info",
+      "  /export [file]   Export current session to HTML",
+      "  /tools           Show active tools and parameter schemas",
       "  /quit /exit      Exit",
       "",
       "Keybindings:",
@@ -635,7 +707,43 @@ ${dim("Enter send \u00b7 Ctrl+C cancel \u00b7 Ctrl+T thinking \u00b7 PgUp/PgDn s
       `Tokens: ${formatTokenCount(this.totalTokensIn)} in / ${formatTokenCount(this.totalTokensOut)} out`,
       `Cache: ${formatTokenCount(this.totalCacheRead)} read / ${formatTokenCount(this.totalCacheWrite)} write`,
       `Tools: ${this.toolNames.join(", ")}`,
+      `Session file: ${this.sessionStore.getSessionFile()}`,
+      `Persisted entries: ${this.sessionStore.getPersistedMessageCount()}`,
     ];
+    this.addStatusMessage(t`${dim(lines.join("\n"))}`);
+  }
+
+  private async handleExportCommand(outputArg: string): Promise<void> {
+    try {
+      const outputPath = outputArg.trim().length > 0 ? outputArg.trim() : undefined;
+      const exported = exportSessionToHtml(this.sessionStore.getSessionFile(), {
+        outputPath,
+        systemPrompt: this.agent.state.systemPrompt,
+        tools: this.agent.getAllTools(),
+      });
+      this.addStatusMessage(t`${dim(`Exported session HTML: ${exported}`)}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.addErrorMessage(`Failed to export session: ${message}`);
+    }
+  }
+
+  private showToolsInfo(): void {
+    const allTools = this.agent.getAllTools();
+    if (allTools.length === 0) {
+      this.addStatusMessage(t`${dim("No tools configured.")}`);
+      return;
+    }
+
+    const activeTools = new Set(this.agent.getActiveTools());
+    const lines = ["Tools:"];
+
+    for (const tool of allTools) {
+      const status = activeTools.has(tool.name) ? "active" : "inactive";
+      lines.push(`  ${tool.name} [${status}] - ${tool.description}`);
+      lines.push(`    params: ${summarizeToolParameters(tool.parameters)}`);
+    }
+
     this.addStatusMessage(t`${dim(lines.join("\n"))}`);
   }
 

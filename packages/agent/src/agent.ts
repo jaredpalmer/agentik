@@ -22,6 +22,7 @@ import type {
   TextContent,
   ThinkingBudgets,
   ThinkingLevel,
+  ToolInfo,
   ToolCall,
   ToolResultMessage,
   TransformContextHook,
@@ -248,6 +249,15 @@ export class Agent {
     this._activeTools = new Set(names);
   }
 
+  /** Get all configured tools with names, descriptions, and parameter schemas. */
+  getAllTools(): ToolInfo[] {
+    return this._state.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    }));
+  }
+
   /**
    * Run input hooks before creating a user message.
    * Returns the (possibly transformed) text and images, or null if handled.
@@ -314,6 +324,10 @@ export class Agent {
 
       getActiveTools: (): string[] => {
         return this.getActiveTools();
+      },
+
+      getAllTools: (): ToolInfo[] => {
+        return this.getAllTools();
       },
 
       setActiveTools: (names: string[]): void => {

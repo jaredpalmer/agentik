@@ -807,15 +807,20 @@ Type /quit to exit
 Commands:
 
 - `/quit` or `/exit` - Exit
-- `/clear` - Clear conversation history
-- `/reset` - Full agent reset
+- `/clear` - Clear conversation history (starts a new session file)
+- `/reset` - Full agent reset (starts a new session file)
 - `/help` - List all available commands (including extension-registered commands)
+- `/session` - Show model/token/session details
+- `/export [file]` - Export current session to HTML (defaults to `<session-id>.html`)
+- `/tools` - Show configured tools and parameter schema summary
 
 Environment variables:
 
 - `AGENTIK_PROVIDER` - `anthropic` (default) or `openai`
 - `AGENTIK_MODEL` - Model ID (default: `claude-sonnet-4-20250514`)
 - `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` - API credentials
+
+Sessions are persisted as JSONL files under `~/.agentik/sessions/<encoded-cwd>/`.
 
 ### Built-in Extensions
 
