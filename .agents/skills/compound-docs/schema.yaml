@@ -1,0 +1,188 @@
+# Agentik Documentation Schema
+# This schema MUST be validated before writing any documentation file
+
+required_fields:
+  module:
+    type: string
+    description: "Module/area of agentik (e.g., 'Agent Loop', 'Event Stream', 'Coding Tools')"
+    examples:
+      - "Agent Loop"
+      - "Event Stream"
+      - "Agent Class"
+      - "Type System"
+      - "Coding Tools"
+      - "CLI/TUI"
+      - "AI SDK Integration"
+      - "Build/Tooling"
+
+  date:
+    type: string
+    pattern: '^\d{4}-\d{2}-\d{2}$'
+    description: "Date when this problem was solved (YYYY-MM-DD)"
+
+  problem_type:
+    type: enum
+    values:
+      - build_error          # Bun build, bundling, compilation errors
+      - test_failure         # Test failures, flaky tests
+      - runtime_error        # Exceptions, crashes during execution
+      - type_error           # TypeScript type errors, declaration issues
+      - streaming_issue      # AI SDK streaming, event ordering, backpressure
+      - tool_execution_issue # Tool invocation, parameter validation, result handling
+      - ai_sdk_integration   # AI SDK API usage, provider config, model calls
+      - performance_issue    # Slow operations, memory issues, event throughput
+      - config_error         # Configuration, environment, workspace issues
+      - dependency_issue     # Package resolution, version conflicts, workspace deps
+      - logic_error          # Algorithm/business logic bugs
+      - developer_experience # DX issues: workflow, tooling, dev setup
+      - documentation_gap    # Missing or inadequate documentation
+    description: "Primary category of the problem"
+
+  component:
+    type: enum
+    values:
+      - agent_loop           # Core agent loop (streamText, tool dispatch, abort)
+      - agent_class          # Agent class, configuration, lifecycle
+      - event_stream         # Event types, event emission, streaming
+      - type_system          # TypeScript types, generics, declaration merging
+      - message_conversion   # Message format conversion, AI SDK message types
+      - tool_bash            # Bash/shell tool execution
+      - tool_edit            # File edit tool (fuzzy matching, diff)
+      - tool_grep            # Grep/search tool
+      - tool_file_io         # read_file, write_file, glob, ls tools
+      - ai_sdk_stream        # AI SDK streamText, streaming protocols
+      - provider_config      # Model provider configuration, API keys
+      - zod_schemas          # Zod schema definitions, validation
+      - cli_tui              # CLI interface, terminal UI
+      - build_tooling        # Bun build, oxlint, oxfmt, lefthook
+      - testing              # Test setup, test utilities, bun:test
+    description: "Agentik component involved"
+
+  symptoms:
+    type: array[string]
+    min_items: 1
+    max_items: 5
+    description: "Observable symptoms (error messages, visual issues, crashes)"
+    examples:
+      - "Type error: Property 'x' does not exist on type 'Y'"
+      - "streamText events arriving out of order"
+      - "Tool execution hangs on abort signal"
+
+  root_cause:
+    type: enum
+    values:
+      - type_mismatch          # TypeScript type incompatibility
+      - missing_type_assertion  # Missing 'as' cast or type guard
+      - declaration_merge_error # Interface/declaration merging conflict
+      - zod_schema_error        # Zod schema definition or validation bug
+      - ai_sdk_api_change       # AI SDK API breaking change or misuse
+      - stream_event_ordering   # Incorrect stream event sequence
+      - async_timing            # Async/await timing, race condition
+      - abort_signal_handling   # AbortController/signal lifecycle issue
+      - subprocess_error        # Child process spawn, stdin/stdout issue
+      - config_error            # Configuration or environment issue
+      - logic_error             # Algorithm/business logic bug
+      - message_format_error    # Message conversion or format mismatch
+      - missing_null_check      # Missing null/undefined guard
+      - encoding_issue          # Text encoding, BOM, CRLF issue
+      - workspace_resolution    # Bun workspace package resolution issue
+      - dependency_version_mismatch # Version conflict between packages
+    description: "Fundamental cause of the problem"
+
+  resolution_type:
+    type: enum
+    values:
+      - code_fix             # Fixed by changing source code
+      - type_fix             # Fixed by correcting types/generics/assertions
+      - config_change        # Fixed by changing configuration
+      - test_fix             # Fixed by correcting tests
+      - dependency_update    # Fixed by updating package/dependency
+      - schema_fix           # Fixed by correcting Zod schema
+      - environment_setup    # Fixed by environment configuration
+      - documentation_update # Added or updated documentation
+      - tooling_addition     # Added helper script or automation
+    description: "Type of fix applied"
+
+  severity:
+    type: enum
+    values:
+      - critical             # Blocks production or development (build fails, data loss)
+      - high                 # Impairs core functionality (feature broken, security issue)
+      - medium               # Affects specific feature (UI broken, performance impact)
+      - low                  # Minor issue or edge case
+    description: "Impact severity"
+
+optional_fields:
+  bun_version:
+    type: string
+    pattern: '^\d+\.\d+\.\d+$'
+    description: "Bun version where this was encountered (e.g., '1.2.4')"
+
+  ai_sdk_version:
+    type: string
+    pattern: '^\d+\.\d+\.\d+$'
+    description: "AI SDK version where this was encountered (e.g., '6.0.72')"
+
+  package:
+    type: string
+    description: "Which package was affected (e.g., '@agentik/agent', '@agentik/coding-agent')"
+
+  related_components:
+    type: array[string]
+    description: "Other components that interact with this issue"
+
+  tags:
+    type: array[string]
+    max_items: 8
+    description: "Searchable keywords (lowercase, hyphen-separated)"
+    examples:
+      - "stream-event"
+      - "type-error"
+      - "zod-schema"
+      - "abort-signal"
+
+validation_rules:
+  - "module must be a valid agentik module name"
+  - "date must be in YYYY-MM-DD format"
+  - "problem_type must match one of the enum values"
+  - "component must match one of the enum values"
+  - "symptoms must be specific and observable (not vague)"
+  - "root_cause must be the ACTUAL cause, not a symptom"
+  - "resolution_type must match one of the enum values"
+  - "severity must match one of the enum values"
+  - "tags should be lowercase, hyphen-separated"
+
+# Example valid front matter:
+# ---
+# module: Agent Loop
+# date: 2025-12-01
+# problem_type: streaming_issue
+# component: ai_sdk_stream
+# symptoms:
+#   - "streamText tool-result events arriving before tool-call events"
+#   - "Agent loop processes stale tool results"
+# root_cause: stream_event_ordering
+# ai_sdk_version: 6.0.72
+# package: "@agentik/agent"
+# resolution_type: code_fix
+# severity: high
+# tags: [stream-event, tool-call, ordering]
+# ---
+#
+# Example type error front matter:
+# ---
+# module: Type System
+# date: 2025-12-02
+# problem_type: type_error
+# component: type_system
+# symptoms:
+#   - "TS2345: Argument of type 'ToolSet' is not assignable to parameter"
+#   - "Generic constraint not satisfied in Agent<Tools>"
+# root_cause: type_mismatch
+# bun_version: 1.2.4
+# ai_sdk_version: 6.0.72
+# package: "@agentik/agent"
+# resolution_type: type_fix
+# severity: medium
+# tags: [typescript, generics, tool-set]
+# ---
