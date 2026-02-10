@@ -15,6 +15,21 @@
     },
     {
       "path": "packages/coding-agent"
+    },
+    {
+      "path": "packages/office-common"
+    },
+    {
+      "path": "packages/office-bridge"
+    },
+    {
+      "path": "packages/office-excel"
+    },
+    {
+      "path": "packages/office-powerpoint"
+    },
+    {
+      "path": "packages/office-outlook"
     }
   ],
   "files": [],

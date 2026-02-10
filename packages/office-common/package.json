@@ -1,0 +1,35 @@
+{
+  "name": "@agentik/office-common",
+  "version": "0.1.0",
+  "description": "Shared protocol, bridge client, and React chat UI for Office add-ins",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "bun test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentik/agent": "workspace:*",
+    "@fluentui/react-components": "^9.56.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5"
+  }
+}

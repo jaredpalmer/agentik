@@ -1,0 +1,32 @@
+{
+  "name": "@agentik/office-bridge",
+  "version": "0.1.0",
+  "description": "Bun WebSocket bridge server for Office add-in agent sessions",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "bun run src/server.ts",
+    "test": "bun test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentik/agent": "workspace:*",
+    "@agentik/office-common": "workspace:*",
+    "@ai-sdk/anthropic": "3.0.37",
+    "@ai-sdk/openai": "3.0.25",
+    "ai": "6.0.72",
+    "zod": "4.3.6"
+  }
+}

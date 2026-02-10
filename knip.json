@@ -1,0 +1,24 @@
+{
+  "workspaces": {
+    "packages/office-common": {
+      "ignoreDependencies": ["zod"]
+    },
+    "packages/office-excel": {
+      "entry": ["src/taskpane/main.tsx", "src/commands/commands.ts"],
+      "ignoreDependencies": ["@types/office-js"]
+    },
+    "packages/office-powerpoint": {
+      "entry": ["src/taskpane/main.tsx", "src/commands/commands.ts"],
+      "ignoreDependencies": ["@types/office-js"]
+    },
+    "packages/office-outlook": {
+      "entry": ["src/taskpane/main.tsx", "src/commands/commands.ts"],
+      "ignoreDependencies": ["@types/office-js"]
+    }
+  },
+  "ignore": [
+    "packages/office-common/src/ui/index.ts",
+    "packages/office-outlook/src/context/outlook-context.ts",
+    "packages/office-powerpoint/src/context/ppt-context.ts"
+  ]
+}
