@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -19,7 +20,7 @@ const BRIDGE_PORT = 3100;
 export default defineConfig({
   root: resolve(__dirname, "src"),
   publicDir: resolve(__dirname, "src/assets"),
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: {
     outDir: resolve(__dirname, "dist"),
     rollupOptions: {

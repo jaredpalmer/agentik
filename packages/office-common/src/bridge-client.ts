@@ -21,7 +21,7 @@ export type ToolHandler = (
 
 export interface BridgeClientOptions {
   url: string;
-  apiKey: string;
+  apiKey?: string;
   provider?: string;
   model?: string;
   appType?: "excel" | "powerpoint" | "outlook";

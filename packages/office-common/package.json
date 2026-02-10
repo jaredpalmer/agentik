@@ -13,7 +13,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./src/ui/globals.css": "./src/ui/globals.css"
   },
   "scripts": {
     "build": "tsc -b",
@@ -23,13 +24,13 @@
   },
   "dependencies": {
     "@agentik/agent": "workspace:*",
-    "@fluentui/react-components": "^9.56.6",
+    "clsx": "^2.1.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "tailwind-merge": "^3.4.0",
     "zod": "4.3.6"
   },
   "devDependencies": {
     "@types/react": "^19.1.4",
-    "@types/react-dom": "^19.1.5"
+    "tailwindcss": "^4.1.18"
   }
 }

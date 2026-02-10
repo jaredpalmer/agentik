@@ -1,154 +1,68 @@
-import {
-  FluentProvider,
-  Tab,
-  TabList,
-  makeStyles,
-  tokens,
-  webLightTheme,
-} from "@fluentui/react-components";
-import { ChatPanel, SettingsPanel, StatusBar, useBridge, useChat } from "@agentik/office-common";
-import { useCallback, useEffect, useState } from "react";
+import { ChatPanel, StatusBar, useBridge, useChat } from "@agentik/office-common";
+import { useEffect, useState } from "react";
 import { registerExcelHandlers } from "../handlers/index.js";
 import { listenExcelContext } from "../context/excel-context.js";
 
 declare const __BRIDGE_URL__: string;
 
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100vh",
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  tabContent: {
-    flex: 1,
-    overflow: "hidden",
-  },
-  tabList: {
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-  },
-  contextBar: {
-    padding: "4px 12px",
-    fontSize: "11px",
-    color: tokens.colorNeutralForeground3,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-});
-
-type TabValue = "chat" | "settings";
-
 export function App() {
-  const styles = useStyles();
-  const [activeTab, setActiveTab] = useState<TabValue>("settings");
-  const [apiKey, setApiKey] = useState("");
-  const [provider, setProvider] = useState("anthropic");
-  const [model, setModel] = useState("");
   const [error, setError] = useState<string>();
-  const [contextInfo, setContextInfo] = useState<string>("");
+  const [contextInfo, setContextInfo] = useState("");
 
-  const { client, state, sessionId, connect, disconnect } = useBridge({
+  const { client, state, sessionId, connect } = useBridge({
     url: __BRIDGE_URL__,
-    apiKey,
-    provider,
-    model: model || undefined,
     appType: "excel",
   });
 
-  const { messages, isStreaming, sendMessage, abort, clearMessages } = useChat(client);
+  const { messages, isStreaming, sendMessage, abort } = useChat(client);
 
-  // Register Excel tool handlers when client is available
+  // Auto-connect on mount
   useEffect(() => {
-    if (!client) return;
-    const cleanup = registerExcelHandlers(client);
-    return cleanup;
-  }, [client]);
-
-  // Listen for Excel context changes
-  useEffect(() => {
-    const cleanup = listenExcelContext((info) => {
-      const parts: string[] = [];
-      if (info.documentName) parts.push(info.documentName);
-      if (info.activeContext) parts.push(info.activeContext);
-      setContextInfo(parts.join(" | "));
-    });
-    return cleanup;
-  }, []);
-
-  // Listen for bridge errors
-  useEffect(() => {
-    if (!client) return;
-    const unsub = client.on("error", (_code, message) => {
-      setError(message);
-    });
-    return unsub;
-  }, [client]);
-
-  // Auto-switch to chat tab when connected
-  useEffect(() => {
-    if (state === "ready") {
-      setActiveTab("chat");
-      setError(undefined);
-    }
-  }, [state]);
-
-  const handleConnect = useCallback(() => {
-    setError(undefined);
     connect();
   }, [connect]);
 
-  const handleDisconnect = useCallback(() => {
-    clearMessages();
-    disconnect();
-    setActiveTab("settings");
-  }, [clearMessages, disconnect]);
+  useEffect(() => {
+    if (!client) return;
+    return registerExcelHandlers(client);
+  }, [client]);
 
-  const isConnected = state === "ready" || state === "connected";
+  useEffect(() => {
+    return listenExcelContext((info) => {
+      const parts: string[] = [];
+      if (info.documentName) parts.push(info.documentName);
+      if (info.activeContext) parts.push(info.activeContext);
+      setContextInfo(parts.join(" \u00b7 "));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!client) return;
+    return client.on("error", (_code, message) => setError(message));
+  }, [client]);
 
   return (
-    <FluentProvider theme={webLightTheme}>
-      <div className={styles.root}>
-        <TabList
-          className={styles.tabList}
-          selectedValue={activeTab}
-          onTabSelect={(_, data) => setActiveTab(data.value as TabValue)}
-          size="small"
-        >
-          <Tab value="chat">Chat</Tab>
-          <Tab value="settings">Settings</Tab>
-        </TabList>
+    <div className="flex flex-col h-screen bg-background font-sans">
+      <header className="flex items-center justify-between py-3 pl-4 pr-3 border-b border-muted">
+        <span className="text-sm font-semibold text-foreground">&#9889; Agentik</span>
+      </header>
 
-        {contextInfo && <div className={styles.contextBar}>{contextInfo}</div>}
-
-        <div className={styles.tabContent}>
-          {activeTab === "chat" ? (
-            <ChatPanel
-              messages={messages}
-              isStreaming={isStreaming}
-              onSendMessage={sendMessage}
-              onAbort={abort}
-              disabled={state !== "ready"}
-            />
-          ) : (
-            <SettingsPanel
-              apiKey={apiKey}
-              onApiKeyChange={setApiKey}
-              provider={provider}
-              onProviderChange={setProvider}
-              model={model}
-              onModelChange={setModel}
-              isConnected={isConnected}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-            />
-          )}
+      {contextInfo && (
+        <div className="py-1 px-4 text-[11px] text-muted-foreground bg-card border-b border-muted whitespace-nowrap overflow-hidden text-ellipsis">
+          {contextInfo}
         </div>
+      )}
 
-        <StatusBar state={state} sessionId={sessionId} error={error} />
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <ChatPanel
+          messages={messages}
+          isStreaming={isStreaming}
+          onSendMessage={sendMessage}
+          onAbort={abort}
+          disabled={state !== "ready"}
+        />
       </div>
-    </FluentProvider>
+
+      <StatusBar state={state} sessionId={sessionId} error={error} />
+    </div>
   );
 }

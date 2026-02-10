@@ -23,7 +23,7 @@ export class BridgeSession {
   }
 
   init(
-    apiKey: string,
+    apiKey?: string,
     provider?: string,
     model?: string,
     appType?: "excel" | "powerpoint" | "outlook"

@@ -41,6 +41,7 @@ export { MessageBubble } from "./ui/MessageBubble.js";
 export { SettingsPanel } from "./ui/SettingsPanel.js";
 export { ToolCallCard } from "./ui/ToolCallCard.js";
 export { StatusBar } from "./ui/StatusBar.js";
+export { ArrowLeftIcon, GearIcon } from "./ui/icons.js";
 
 // Hooks
 export { useBridge } from "./hooks/useBridge.js";

@@ -5,5 +5,9 @@ dist
 build
 tsconfig.tsbuildinfo
 
+# Environment variables
+.env
+.env.local
+
 # Office add-in dev certificates
 certs/

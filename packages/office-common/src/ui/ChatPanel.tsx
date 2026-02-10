@@ -1,7 +1,8 @@
-import { Button, Input, Spinner, makeStyles, tokens } from "@fluentui/react-components";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../hooks/useChat.js";
+import { ArrowUpIcon, SquareIcon } from "./icons.js";
 import { MessageBubble } from "./MessageBubble.js";
+import { cn } from "./utils.js";
 
 export interface ChatPanelProps {
   messages: ChatMessage[];
@@ -11,33 +12,6 @@ export interface ChatPanelProps {
   disabled?: boolean;
 }
 
-const useStyles = makeStyles({
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    overflow: "hidden",
-  },
-  messageList: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  inputArea: {
-    padding: "12px",
-    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-    display: "flex",
-    gap: "8px",
-    alignItems: "center",
-  },
-  input: {
-    flex: 1,
-  },
-});
-
 export function ChatPanel({
   messages,
   isStreaming,
@@ -45,9 +19,9 @@ export function ChatPanel({
   onAbort,
   disabled,
 }: ChatPanelProps) {
-  const styles = useStyles();
   const [input, setInput] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (listRef.current) {
@@ -55,43 +29,80 @@ export function ChatPanel({
     }
   }, [messages]);
 
-  const handleSubmit = useCallback(
-    (e: FormEvent) => {
-      e.preventDefault();
-      const trimmed = input.trim();
-      if (!trimmed || disabled) return;
-      onSendMessage(trimmed);
-      setInput("");
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  }, [input]);
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed || disabled) return;
+    onSendMessage(trimmed);
+    setInput("");
+  }, [input, disabled, onSendMessage]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
     },
-    [input, disabled, onSendMessage]
+    [handleSubmit]
   );
 
+  const isDisabled = !input.trim() || disabled;
+
   return (
-    <div className={styles.container}>
-      <div ref={listRef} className={styles.messageList}>
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-        {isStreaming && <Spinner size="tiny" label="Thinking..." />}
+    <div className="flex flex-col h-full">
+      {messages.length === 0 ? (
+        <div className="flex flex-col items-center justify-center flex-1 gap-2 px-6">
+          <span className="text-base font-medium text-muted-foreground">What can I help with?</span>
+        </div>
+      ) : (
+        <div ref={listRef} className="flex-1 overflow-y-auto pt-4 pb-2 px-4 flex flex-col gap-5">
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
+        </div>
+      )}
+      <div className="px-4 pb-4 pt-2">
+        <div className="flex items-end border border-border rounded-[14px] py-2 pl-3.5 pr-1.5 bg-background transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:shadow-[0_0_0_1px_var(--border)]">
+          <textarea
+            ref={textareaRef}
+            className="flex-1 border-0 outline-none resize-none font-[inherit] text-sm leading-5 text-foreground bg-transparent max-h-[120px] min-h-5 p-0 pr-2 placeholder:text-muted-foreground"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Message Agentik..."
+            rows={1}
+            disabled={disabled}
+          />
+          {isStreaming ? (
+            <button
+              className="flex items-center justify-center w-7 h-7 rounded-lg border-0 bg-foreground text-background cursor-pointer shrink-0 transition-colors duration-150 hover:bg-foreground/80"
+              onClick={onAbort}
+              type="button"
+            >
+              <SquareIcon size={12} />
+            </button>
+          ) : (
+            <button
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-lg border-0 bg-foreground text-background cursor-pointer shrink-0 transition-colors duration-150 hover:bg-foreground/80",
+                isDisabled && "bg-border text-muted-foreground cursor-default hover:bg-border"
+              )}
+              onClick={handleSubmit}
+              disabled={isDisabled}
+              type="button"
+            >
+              <ArrowUpIcon size={14} />
+            </button>
+          )}
+        </div>
       </div>
-      <form className={styles.inputArea} onSubmit={handleSubmit}>
-        <Input
-          className={styles.input}
-          value={input}
-          onChange={(_, data) => setInput(data.value)}
-          placeholder="Type a message..."
-          disabled={disabled}
-        />
-        {isStreaming ? (
-          <Button appearance="secondary" onClick={onAbort}>
-            Stop
-          </Button>
-        ) : (
-          <Button appearance="primary" type="submit" disabled={disabled || !input.trim()}>
-            Send
-          </Button>
-        )}
-      </form>
     </div>
   );
 }

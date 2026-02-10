@@ -3,7 +3,7 @@ import { BridgeClient, type BridgeClientState } from "../bridge-client.js";
 
 export interface UseBridgeOptions {
   url: string;
-  apiKey: string;
+  apiKey?: string;
   provider?: string;
   model?: string;
   appType?: "excel" | "powerpoint" | "outlook";
@@ -23,13 +23,6 @@ export function useBridge(options: UseBridgeOptions): UseBridgeReturn {
   const clientRef = useRef<BridgeClient | null>(null);
 
   useEffect(() => {
-    if (!options.apiKey) {
-      clientRef.current = null;
-      setState("disconnected");
-      setSessionId(null);
-      return;
-    }
-
     const client = new BridgeClient({
       url: options.url,
       apiKey: options.apiKey,

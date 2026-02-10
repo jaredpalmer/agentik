@@ -1,5 +1,6 @@
-import { Badge, Card, Spinner, Text, makeStyles, tokens } from "@fluentui/react-components";
 import { useState } from "react";
+import { ChevronIcon } from "./icons.js";
+import { cn } from "./utils.js";
 
 export interface ToolCallCardProps {
   toolName: string;
@@ -9,76 +10,48 @@ export interface ToolCallCardProps {
   isExecuting?: boolean;
 }
 
-const useStyles = makeStyles({
-  card: {
-    padding: "8px",
-    marginTop: "4px",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "4px",
-  },
-  args: {
-    fontFamily: "monospace",
-    fontSize: "11px",
-    backgroundColor: tokens.colorNeutralBackground4,
-    padding: "4px 8px",
-    borderRadius: "4px",
-    overflowX: "auto",
-    whiteSpace: "pre-wrap",
-    maxHeight: "120px",
-    overflowY: "auto",
-  },
-  result: {
-    marginTop: "4px",
-    padding: "4px 8px",
-    borderRadius: "4px",
-    fontSize: "12px",
-    whiteSpace: "pre-wrap",
-  },
-  resultSuccess: {
-    backgroundColor: tokens.colorPaletteGreenBackground1,
-    color: tokens.colorPaletteGreenForeground1,
-  },
-  resultError: {
-    backgroundColor: tokens.colorPaletteRedBackground1,
-    color: tokens.colorPaletteRedForeground1,
-  },
-  toggle: {
-    cursor: "pointer",
-    fontSize: "11px",
-    color: tokens.colorBrandForeground1,
-    border: "none",
-    background: "none",
-    padding: 0,
-  },
-});
-
 export function ToolCallCard({ toolName, args, result, isError, isExecuting }: ToolCallCardProps) {
-  const styles = useStyles();
-  const [showArgs, setShowArgs] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = args != null || result != null;
 
   return (
-    <Card className={styles.card} size="small">
-      <div className={styles.header}>
-        <Badge appearance="outline" size="small">
-          {toolName}
-        </Badge>
-        {isExecuting && <Spinner size="extra-tiny" />}
-        {args != null && (
-          <button className={styles.toggle} onClick={() => setShowArgs(!showArgs)} type="button">
-            {showArgs ? "Hide params" : "Show params"}
-          </button>
+    <div className="border border-border rounded-lg overflow-hidden">
+      <button
+        className="flex items-center gap-1.5 py-1.5 px-2.5 bg-card w-full cursor-pointer font-[inherit] border-0 hover:bg-muted"
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        type="button"
+      >
+        {hasDetails && (
+          <ChevronIcon
+            size={10}
+            direction={expanded ? "down" : "right"}
+            className="text-muted-foreground shrink-0"
+          />
         )}
-      </div>
-      {showArgs && args && <div className={styles.args}>{JSON.stringify(args, null, 2)}</div>}
-      {result != null && (
-        <Text className={`${styles.result} ${isError ? styles.resultError : styles.resultSuccess}`}>
-          {result}
-        </Text>
+        <span className="text-xs font-medium text-foreground/80 font-mono">{toolName}</span>
+        {isExecuting && (
+          <span className="text-[11px] text-muted-foreground ml-auto">running...</span>
+        )}
+      </button>
+      {expanded && (
+        <>
+          {args != null && Object.keys(args as object).length > 0 && (
+            <pre className="font-mono text-[11px] leading-4 text-foreground/80 bg-card py-1.5 px-2.5 border-t border-muted overflow-x-auto whitespace-pre-wrap break-all max-h-[100px] overflow-y-auto m-0">
+              {JSON.stringify(args, null, 2)}
+            </pre>
+          )}
+          {result != null && (
+            <div
+              className={cn(
+                "text-xs leading-[18px] py-1.5 px-2.5 border-t border-muted whitespace-pre-wrap break-words max-h-[100px] overflow-y-auto",
+                isError ? "text-red-900 bg-red-50" : "text-green-900 bg-green-50"
+              )}
+            >
+              {result}
+            </div>
+          )}
+        </>
       )}
-    </Card>
+    </div>
   );
 }

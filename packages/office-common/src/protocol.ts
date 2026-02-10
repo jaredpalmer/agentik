@@ -6,7 +6,7 @@ import type { AgentEvent, TextContent } from "@agentik/agent";
 
 export interface InitMessage {
   type: "init";
-  apiKey: string;
+  apiKey?: string;
   provider?: string;
   model?: string;
   appType?: "excel" | "powerpoint" | "outlook";

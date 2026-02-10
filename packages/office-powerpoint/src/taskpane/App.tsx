@@ -1,60 +1,51 @@
-import { FluentProvider, webLightTheme } from "@fluentui/react-components";
-import { ChatPanel, SettingsPanel, StatusBar, useBridge, useChat } from "@agentik/office-common";
+import { ChatPanel, StatusBar, useBridge, useChat } from "@agentik/office-common";
 import { useEffect, useState } from "react";
 import { registerPowerPointHandlers } from "../handlers/index.js";
 
 declare const __BRIDGE_URL__: string;
 
 export function App() {
-  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem("apiKey") ?? "");
-  const [provider, setProvider] = useState("anthropic");
-  const [model, setModel] = useState("");
+  const [error, setError] = useState<string>();
 
-  const { client, state, sessionId, connect, disconnect } = useBridge({
+  const { client, state, sessionId, connect } = useBridge({
     url: __BRIDGE_URL__,
-    apiKey,
-    provider,
-    model: model || undefined,
     appType: "powerpoint",
   });
 
   const { messages, isStreaming, sendMessage, abort } = useChat(client);
+
+  // Auto-connect on mount
+  useEffect(() => {
+    connect();
+  }, [connect]);
 
   useEffect(() => {
     if (!client) return;
     return registerPowerPointHandlers(client);
   }, [client]);
 
-  const handleApiKeyChange = (key: string) => {
-    setApiKey(key);
-    sessionStorage.setItem("apiKey", key);
-  };
+  useEffect(() => {
+    if (!client) return;
+    return client.on("error", (_code, message) => setError(message));
+  }, [client]);
 
   return (
-    <FluentProvider theme={webLightTheme}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-        {state !== "ready" ? (
-          <SettingsPanel
-            apiKey={apiKey}
-            onApiKeyChange={handleApiKeyChange}
-            provider={provider}
-            onProviderChange={setProvider}
-            model={model}
-            onModelChange={setModel}
-            isConnected={state === "connected"}
-            onConnect={connect}
-            onDisconnect={disconnect}
-          />
-        ) : (
-          <ChatPanel
-            messages={messages}
-            isStreaming={isStreaming}
-            onSendMessage={sendMessage}
-            onAbort={abort}
-          />
-        )}
-        <StatusBar state={state} sessionId={sessionId} />
+    <div className="flex flex-col h-screen bg-background font-sans">
+      <header className="flex items-center justify-between py-3 pl-4 pr-3 border-b border-muted">
+        <span className="text-sm font-semibold text-foreground">&#9889; Agentik</span>
+      </header>
+
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <ChatPanel
+          messages={messages}
+          isStreaming={isStreaming}
+          onSendMessage={sendMessage}
+          onAbort={abort}
+          disabled={state !== "ready"}
+        />
       </div>
-    </FluentProvider>
+
+      <StatusBar state={state} sessionId={sessionId} error={error} />
+    </div>
   );
 }

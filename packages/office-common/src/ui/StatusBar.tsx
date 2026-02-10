@@ -1,18 +1,11 @@
-import { Badge, Text, Tooltip, makeStyles, tokens } from "@fluentui/react-components";
 import type { BridgeClientState } from "../bridge-client.js";
+import { cn } from "./utils.js";
 
 export interface StatusBarProps {
   state: BridgeClientState;
   sessionId: string | null;
   error?: string;
 }
-
-const STATE_COLORS: Record<BridgeClientState, "success" | "warning" | "danger" | "informative"> = {
-  disconnected: "danger",
-  connecting: "warning",
-  connected: "informative",
-  ready: "success",
-};
 
 const STATE_LABELS: Record<BridgeClientState, string> = {
   disconnected: "Disconnected",
@@ -21,42 +14,23 @@ const STATE_LABELS: Record<BridgeClientState, string> = {
   ready: "Ready",
 };
 
-const useStyles = makeStyles({
-  container: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "4px 12px",
-    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    minHeight: "28px",
-  },
-  error: {
-    color: tokens.colorPaletteRedForeground1,
-    fontSize: "12px",
-  },
-  sessionId: {
-    fontSize: "11px",
-    color: tokens.colorNeutralForeground3,
-    fontFamily: "monospace",
-  },
-});
+const DOT_COLORS: Record<BridgeClientState, string> = {
+  disconnected: "bg-red-500",
+  connecting: "bg-amber-500",
+  connected: "bg-blue-500",
+  ready: "bg-green-500",
+};
 
-export function StatusBar({ state, sessionId, error }: StatusBarProps) {
-  const styles = useStyles();
-  const truncatedId = sessionId ? sessionId.slice(0, 8) : null;
-
+export function StatusBar({ state, error }: StatusBarProps) {
   return (
-    <div className={styles.container}>
-      <Badge color={STATE_COLORS[state]} size="small">
-        {STATE_LABELS[state]}
-      </Badge>
-      {truncatedId && (
-        <Tooltip content={sessionId!} relationship="description">
-          <Text className={styles.sessionId}>{truncatedId}</Text>
-        </Tooltip>
+    <div className="flex items-center gap-1.5 py-1.5 px-4 border-t border-muted">
+      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", DOT_COLORS[state])} />
+      <span className="text-[11px] text-muted-foreground">{STATE_LABELS[state]}</span>
+      {error && (
+        <span className="text-[11px] text-destructive ml-auto overflow-hidden text-ellipsis whitespace-nowrap">
+          {error}
+        </span>
       )}
-      {error && <Text className={styles.error}>{error}</Text>}
     </div>
   );
 }
