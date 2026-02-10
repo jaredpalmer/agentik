@@ -1,9 +1,11 @@
 @import "tailwindcss";
+@import "streamdown/styles.css";
 
 @source "../";
 @source "../../../office-excel/src";
 @source "../../../office-outlook/src";
 @source "../../../office-powerpoint/src";
+@source "../../../node_modules/streamdown/dist/*.js";
 
 :root {
   --background: oklch(1 0 0);
@@ -54,6 +56,21 @@
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, "Cascadia Code", "Segoe UI Mono", monospace;
+}
+
+@layer components {
+  [data-streamdown="table-wrapper"] {
+    position: relative;
+  }
+
+  [data-streamdown="table-wrapper"] > div:first-child:has(button) {
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 10;
+    margin: 0;
+    padding: 8px;
+  }
 }
 
 @layer base {

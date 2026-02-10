@@ -1,3 +1,4 @@
+import { Streamdown } from "streamdown";
 import type { ChatMessage } from "../hooks/useChat.js";
 import { ToolCallCard } from "./ToolCallCard.js";
 
@@ -44,9 +45,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         )}
         {message.content && (
-          <div className="text-sm leading-[22px] text-foreground whitespace-pre-wrap break-words">
+          <Streamdown mode={message.isStreaming ? "streaming" : "static"}>
             {message.content}
-          </div>
+          </Streamdown>
         )}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-col gap-1">

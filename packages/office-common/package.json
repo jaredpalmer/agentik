@@ -26,6 +26,7 @@
     "@agentik/agent": "workspace:*",
     "clsx": "^2.1.1",
     "react": "^19.1.0",
+    "streamdown": "^2.2.0",
     "tailwind-merge": "^3.4.0",
     "zod": "4.3.6"
   },
