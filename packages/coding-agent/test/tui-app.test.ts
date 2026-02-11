@@ -4,6 +4,7 @@ import { TuiApp } from "../src/tui/tui-app";
 type AgentStub = { subscribe: () => () => void };
 type TestableApp = TuiApp & {
   handleEvent: (event: unknown) => void;
+  submitPrompt: (prompt: string) => void;
   messages: Array<{ role: string; content: string }>;
 };
 
@@ -65,5 +66,40 @@ describe("TuiApp", () => {
     handleEvent({ type: "error", error });
 
     expect(app.messages.length).toBe(0);
+  });
+
+  it("shows explicit tool error status", () => {
+    const app = createApp() as unknown as TestableApp & {
+      formatToolStatus: (
+        toolName: string,
+        args: unknown,
+        status: "running" | "done" | "error"
+      ) => string;
+    };
+
+    const status = app.formatToolStatus("read", { path: "src/index.ts" }, "error");
+
+    expect(status).toBe("Error running Read");
+  });
+
+  it("does not duplicate errors already emitted as events", async () => {
+    const error = new Error("Boom");
+    error.stack = "Stack: boom";
+
+    let app = null as unknown as TestableApp;
+    const agent = {
+      subscribe: () => () => {},
+      prompt: async () => {
+        app.handleEvent({ type: "error", error });
+        throw error;
+      },
+    };
+    app = new TuiApp({ agent: agent as never }) as unknown as TestableApp;
+
+    app.submitPrompt("hello");
+    await Promise.resolve();
+
+    expect(app.messages.length).toBe(1);
+    expect(app.messages[0]?.content).toBe("Stack: boom");
   });
 });
