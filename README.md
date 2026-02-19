@@ -24,13 +24,8 @@ npm install @jaredpalmer/agentik
 
 Agentik is intentionally split into two layers so you can adopt only what you need.
 
-- `runtime`: A modular agent loop built on AI SDK v6 `streamText` that owns tool execution, emits a structured event stream, and provides lifecycle hooks and built-in tools.
-- `cli`: A minimal reference client that wires the runtime into a TUI and demonstrates streaming, tool events, and UI rendering.
-
-**Packages**
-
-- `@jaredpalmer/agentik` (`packages/runtime`): core agent loop/runtime, tool calls, and event model built on AI SDK
-- `@jaredpalmer/coding-agent` (`packages/coding-agent`): minimal agent CLI and TUI built on OpenTUI
+- `@jaredpalmer/agentik` (`packages/runtime`): A modular agent loop built on AI SDK v6 `streamText` that owns tool execution, emits a structured event stream, and provides lifecycle hooks and built-in tools.
+- `@jaredpalmer/coding-agent` (`packages/coding-agent`): A minimal reference CLI and TUI built on OpenTUI that wires the runtime into an interactive interface.
 
 ## Runtime
 
