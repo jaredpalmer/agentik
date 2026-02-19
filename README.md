@@ -2,6 +2,9 @@
 
 Agentik is a composable runtime for building coding agents on top of AI SDK v6. It gives you a modular agent loop with streaming tool execution, lifecycle hooks, session recording, subagent delegation, and a structured event stream—allowing you to focus on your tools and UX instead of wiring up the loop yourself. Embed the runtime in your own product, or use the included CLI as a ready-made interface.
 
+<img alt="Screenshot" src="https://github.com/user-attachments/assets/893600ef-b6cf-4ca3-b3f2-07f850cb6d20" width="500" height="500" />
+
+
 **What you get out of the box:**
 
 - **Agent loop** — multi-turn reasoning with automatic tool execution, streaming responses, and extended thinking support
