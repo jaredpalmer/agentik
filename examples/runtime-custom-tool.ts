@@ -1,6 +1,6 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { jsonSchema } from "@ai-sdk/provider-utils";
-import { Agent, type AgentToolDefinition } from "@agentik/runtime";
+import { Agent, type AgentToolDefinition } from "@jaredpalmer/agentik";
 
 // Example of defining a custom tool and letting the model call it.
 // Requires environment variables:

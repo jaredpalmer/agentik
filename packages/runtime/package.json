@@ -1,7 +1,11 @@
 {
-  "name": "@agentik/runtime",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@jaredpalmer/agentik",
+  "version": "0.0.1",
+  "private": false,
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -12,7 +12,7 @@ import {
   type StyledText,
   type TextareaAction,
 } from "@opentui/core";
-import type { Agent, AgentEvent, AgentMessage } from "@agentik/runtime";
+import type { Agent, AgentEvent, AgentMessage } from "@jaredpalmer/agentik";
 import { Box, MarkdownBlock, TextBlock } from "./components";
 import { colors } from "./theme";
 

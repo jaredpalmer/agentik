@@ -1,5 +1,5 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { Agent, createListTool, createReadTool } from "@agentik/runtime";
+import { Agent, createListTool, createReadTool } from "@jaredpalmer/agentik";
 
 // Example using built-in file tools with a real model.
 // Requires environment variables:

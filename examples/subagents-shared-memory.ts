@@ -5,7 +5,7 @@ import {
   SubagentRegistry,
   createReadTool,
   createSubagentTool,
-} from "@agentik/runtime";
+} from "@jaredpalmer/agentik";
 
 const sharedMemory = new SharedMemoryStore();
 const registry = new SubagentRegistry();

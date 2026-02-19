@@ -1,4 +1,4 @@
-import { Agent, type AgentMessage } from "@agentik/runtime";
+import { Agent, type AgentMessage } from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // This example shows how to trim or enrich context before the model sees it.

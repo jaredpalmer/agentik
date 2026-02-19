@@ -1,4 +1,4 @@
-import { DefaultResourceLoader } from "@agentik/runtime";
+import { DefaultResourceLoader } from "@jaredpalmer/agentik";
 
 const loader = new DefaultResourceLoader({ cwd: process.cwd() });
 await loader.reload();

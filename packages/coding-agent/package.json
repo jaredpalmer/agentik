@@ -1,7 +1,15 @@
 {
-  "name": "@agentik/coding-agent",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@jaredpalmer/coding-agent",
+  "version": "0.0.1",
+  "private": false,
+  "license": "MIT",
+  "bin": {
+    "agentik": "./bin/agentik.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,8 +23,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@agentik/runtime": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.35",
+    "@jaredpalmer/agentik": "workspace:*",
     "@opentui/core": "^0.1.77"
   }
 }

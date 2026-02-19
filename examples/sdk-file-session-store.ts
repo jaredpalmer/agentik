@@ -1,6 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { Agent, type SessionEntry, type SessionStore, type SessionTree } from "@agentik/runtime";
+import {
+  Agent,
+  type SessionEntry,
+  type SessionStore,
+  type SessionTree,
+} from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // Simple file-backed SessionStore to persist a SessionTree as JSON.

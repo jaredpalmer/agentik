@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "agentik",
@@ -15,17 +16,17 @@
       },
     },
     "packages/coding-agent": {
-      "name": "@agentik/coding-agent",
-      "version": "0.0.0",
+      "name": "@jaredpalmer/coding-agent",
+      "version": "0.0.1",
       "dependencies": {
-        "@agentik/runtime": "workspace:*",
         "@ai-sdk/anthropic": "^3.0.35",
+        "@jaredpalmer/agentik": "workspace:*",
         "@opentui/core": "^0.1.77",
       },
     },
     "packages/runtime": {
-      "name": "@agentik/runtime",
-      "version": "0.0.0",
+      "name": "@jaredpalmer/agentik",
+      "version": "0.0.1",
       "dependencies": {
         "@ai-sdk/provider-utils": "^4.0.13",
         "ai": "^6.0.68",
@@ -34,10 +35,6 @@
     },
   },
   "packages": {
-    "@agentik/coding-agent": ["@agentik/coding-agent@workspace:packages/coding-agent"],
-
-    "@agentik/runtime": ["@agentik/runtime@workspace:packages/runtime"],
-
     "@ai-sdk/anthropic": ["@ai-sdk/anthropic@3.0.35", "", { "dependencies": { "@ai-sdk/provider": "3.0.7", "@ai-sdk/provider-utils": "4.0.13" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-Y3g/5uVj621XSB9lGF7WrD7qR+orhV5xpaYkRF8kfj2j4W7e7BBGIvxcdsCf85FjJbc6tKQdNTZ84ZEqT3Y5TQ=="],
 
     "@ai-sdk/gateway": ["@ai-sdk/gateway@3.0.32", "", { "dependencies": { "@ai-sdk/provider": "3.0.7", "@ai-sdk/provider-utils": "4.0.13", "@vercel/oidc": "3.1.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-7clZRr07P9rpur39t1RrbIe7x8jmwnwUWI8tZs+BvAfX3NFgdSVGGIaT7bTz2pb08jmLXzTSDbrOTqAQ7uBkBQ=="],
@@ -55,6 +52,10 @@
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.1.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-WI0DdZ8xFSbgMjR1sFsKABJ/C5OnRrjT06JXbZKexJGrDuPTzZdDYfFlsgcCXCyf+suG5QU2e/y1Wo2V/OapLQ=="],
 
     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],
+
+    "@jaredpalmer/agentik": ["@jaredpalmer/agentik@workspace:packages/runtime"],
+
+    "@jaredpalmer/coding-agent": ["@jaredpalmer/coding-agent@workspace:packages/coding-agent"],
 
     "@jimp/core": ["@jimp/core@1.6.0", "", { "dependencies": { "@jimp/file-ops": "1.6.0", "@jimp/types": "1.6.0", "@jimp/utils": "1.6.0", "await-to-js": "^3.0.0", "exif-parser": "^0.1.12", "file-type": "^16.0.0", "mime": "3" } }, "sha512-EQQlKU3s9QfdJqiSrZWNTxBs3rKXgO2W+GxNXDtwchF3a4IqxDheFX1ti+Env9hdJXDiYLp2jTRjlxhPthsk8w=="],
 

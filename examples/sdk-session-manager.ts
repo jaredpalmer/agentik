@@ -1,4 +1,4 @@
-import { SessionManager } from "@agentik/runtime";
+import { SessionManager } from "@jaredpalmer/agentik";
 
 const sessions = new SessionManager({
   cwd: process.cwd(),

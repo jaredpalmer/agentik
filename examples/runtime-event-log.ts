@@ -1,4 +1,4 @@
-import { Agent } from "@agentik/runtime";
+import { Agent } from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // Collect and print the event sequence emitted by the runtime.

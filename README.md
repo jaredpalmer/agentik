@@ -21,16 +21,16 @@ Agentik is intentionally split into two layers so you can adopt only what you ne
 
 **Packages**
 
-- `@agentik/runtime` (`packages/runtime`): core agent loop/runtime, tool calls, and event model built on AI SDK
-- `@agentik/coding-agent` (`packages/coding-agent`): minimal agent CLI and TUI built on opentui
+- `@jaredpalmer/agentik` (`packages/runtime`): core agent loop/runtime, tool calls, and event model built on AI SDK
+- `@jaredpalmer/coding-agent` (`packages/coding-agent`): minimal agent CLI and TUI built on opentui
 
 ## Runtime
 
-`@agentik/runtime` is a modular agent loop built on AI SDK v6 `streamText` that owns tool execution and emits a structured event stream. The primary entrypoint is `Agent`, which takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners):
+`@jaredpalmer/agentik` is a modular agent loop built on AI SDK v6 `streamText` that owns tool execution and emits a structured event stream. The primary entrypoint is `Agent`, which takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners):
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { Agent, createReadTool, createWriteTool } from "@agentik/runtime";
+import { Agent, createReadTool, createWriteTool } from "@jaredpalmer/agentik";
 
 const agent = new Agent({
   model: anthropic("claude-opus-4-5"),
@@ -55,7 +55,7 @@ The runtime is intentionally “dumb” and deterministic: it runs the loop, exe
 Steering messages are injected before the next model turn, so they can redirect the loop at a turn boundary. Follow-up messages are appended after the current turn completes, so they do not change the in-flight turn. Each queue supports `one-at-a-time` or `all` modes.
 
 ```ts
-import { Agent } from "@agentik/runtime";
+import { Agent } from "@jaredpalmer/agentik";
 
 const agent = new Agent({
   model,
@@ -75,7 +75,7 @@ Provide a `SessionStore` to record `message_end` events as session entries.
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { Agent, InMemorySessionStore, createReadTool, createWriteTool } from "@agentik/runtime";
+import { Agent, InMemorySessionStore, createReadTool, createWriteTool } from "@jaredpalmer/agentik";
 
 const agent = new Agent({
   model: anthropic("claude-opus-4-5"),
@@ -91,7 +91,7 @@ await agent.prompt("List the repo packages.");
 If you want pi-style JSONL sessions with tree/branching, use `SessionManager`. It owns session files and can build LLM-ready context from the current leaf.
 
 ```ts
-import { SessionManager } from "@agentik/runtime";
+import { SessionManager } from "@jaredpalmer/agentik";
 
 const sessions = new SessionManager({
   cwd: process.cwd(),
@@ -112,7 +112,7 @@ console.log("Session file:", sessions.getSessionFile());
 Compaction helpers are available as pure functions so you can wire them into your own policy.
 
 ```ts
-import { compact } from "@agentik/runtime";
+import { compact } from "@jaredpalmer/agentik";
 
 const result = await compact({
   entries: sessions.getEntries(),
@@ -131,7 +131,7 @@ if (result) {
 Use `getApiKey` to resolve short-lived tokens and `streamFn` to wrap or proxy the AI SDK stream.
 
 ```ts
-import { Agent } from "@agentik/runtime";
+import { Agent } from "@jaredpalmer/agentik";
 
 const agent = new Agent({
   model,
@@ -146,7 +146,7 @@ const agent = new Agent({
 Use `AuthStore` to persist API keys and `ModelRegistry` to register models with metadata and factories.
 
 ```ts
-import { InMemoryAuthStore, ModelRegistry } from "@agentik/runtime";
+import { InMemoryAuthStore, ModelRegistry } from "@jaredpalmer/agentik";
 
 const authStore = new InMemoryAuthStore();
 await authStore.set("provider-id", "api-key");
@@ -165,7 +165,7 @@ const model = await registry.resolveModel("fast-model");
 
 ## Built-in tools
 
-`@agentik/runtime` ships a small built-in toolset:
+`@jaredpalmer/agentik` ships a small built-in toolset:
 
 - `read`, `write`, `edit`, `update`
 - `list`, `glob`, `find`, `grep`
@@ -177,7 +177,7 @@ const model = await registry.resolveModel("fast-model");
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
-import { Agent, createBashTool, createReadTool } from "@agentik/runtime";
+import { Agent, createBashTool, createReadTool } from "@jaredpalmer/agentik";
 
 const agent = new Agent({
   model: anthropic("claude-opus-4-5"),
@@ -200,7 +200,7 @@ await agent.prompt("Find TODOs and summarize them.");
 
 ```ts
 import { jsonSchema } from "@ai-sdk/provider-utils";
-import type { AgentToolDefinition } from "@agentik/runtime";
+import type { AgentToolDefinition } from "@jaredpalmer/agentik";
 
 type RepoStatsInput = { path: string };
 
@@ -224,7 +224,12 @@ const repoStatsTool: AgentToolDefinition<RepoStatsInput, string> = {
 
 ```ts
 import { readFile, writeFile } from "node:fs/promises";
-import { Agent, type SessionEntry, type SessionStore, type SessionTree } from "@agentik/runtime";
+import {
+  Agent,
+  type SessionEntry,
+  type SessionStore,
+  type SessionTree,
+} from "@jaredpalmer/agentik";
 
 class FileSessionStore implements SessionStore {
   constructor(private filePath: string) {}
@@ -262,7 +267,7 @@ import {
   createReadTool,
   createSubagentTool,
   Agent,
-} from "@agentik/runtime";
+} from "@jaredpalmer/agentik";
 
 const sharedMemory = new SharedMemoryStore();
 const registry = new SubagentRegistry();
@@ -290,7 +295,7 @@ sharedMemory.set("todos", "Captured in explorer output.");
 **Install**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jaredpalmer/agentik/main/install.sh | bash
+npm install -g @jaredpalmer/coding-agent
 ```
 
 **Usage**
@@ -299,15 +304,6 @@ curl -fsSL https://raw.githubusercontent.com/jaredpalmer/agentik/main/install.sh
 AGENTIK_MODEL=claude-opus-4-5 \
 ANTHROPIC_API_KEY=your_key_here \
 agentik
-```
-
-**Notes**
-
-- The installer downloads the latest `cli-v*` GitHub Release asset and installs it as `agentik` in `~/.local/bin`.
-- Override versions or install location:
-
-```bash
-AGENTIK_VERSION=cli-v0.1.0 AGENTIK_INSTALL_DIR="$HOME/bin" ./install.sh
 ```
 
 **Modes**
@@ -324,7 +320,7 @@ AGENTIK_VERSION=cli-v0.1.0 AGENTIK_INSTALL_DIR="$HOME/bin" ./install.sh
 
 **Why the CLI matters**
 
-The CLI is intentionally small and serves as a reference client. It shows how to wire `@agentik/runtime` tools into `Agent`, stream runtime events, and render them in a UI. If you are embedding Agentik in your own app, `packages/coding-agent` is the shortest path to copy/paste the essentials.
+The CLI is intentionally small and serves as a reference client. It shows how to wire `@jaredpalmer/agentik` tools into `Agent`, stream runtime events, and render them in a UI. If you are embedding Agentik in your own app, `packages/coding-agent` is the shortest path to copy/paste the essentials.
 
 ## Use cases
 
@@ -346,7 +342,7 @@ AI SDK gives you the primitives. Agentik packages those primitives into a repeat
 <details>
 <summary>Do you use AI SDK’s ToolLoopAgent?</summary>
 
-No. `@agentik/runtime` implements its own agent loop on top of AI SDK's `streamText`, giving it full control over tool execution, event emission, and lifecycle hooks.
+No. `@jaredpalmer/agentik` implements its own agent loop on top of AI SDK's `streamText`, giving it full control over tool execution, event emission, and lifecycle hooks.
 
 </details>
 

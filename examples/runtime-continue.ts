@@ -1,4 +1,4 @@
-import { Agent } from "@agentik/runtime";
+import { Agent } from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // Continue lets the model take another turn without adding a new user message.

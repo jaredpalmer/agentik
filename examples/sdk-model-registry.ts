@@ -1,4 +1,4 @@
-import { Agent, InMemoryAuthStore, ModelRegistry } from "@agentik/runtime";
+import { Agent, InMemoryAuthStore, ModelRegistry } from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // Register a model factory that can use API keys from the auth store.

@@ -1,4 +1,4 @@
-import { Agent, InMemorySessionStore } from "@agentik/runtime";
+import { Agent, InMemorySessionStore } from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // Create a session with an in-memory store and record events as session entries.

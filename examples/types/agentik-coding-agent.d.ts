@@ -1,3 +1,3 @@
-declare module "@agentik/coding-agent" {
+declare module "@jaredpalmer/coding-agent" {
   export * from "../../packages/coding-agent/src/index";
 }

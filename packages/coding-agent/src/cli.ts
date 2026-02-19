@@ -14,10 +14,9 @@ import {
   createWebFetchTool,
   createWriteTool,
   type AgentToolDefinition,
-} from "@agentik/runtime";
+} from "@jaredpalmer/agentik";
 import { TuiApp } from "./tui/tui-app";
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 
 type CliMode = "interactive" | "print" | "rpc";
 
@@ -189,12 +188,4 @@ function formatRuntimeError(error: unknown): string {
       return "Unknown error";
     }
   }
-}
-
-const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
-if (entryUrl && import.meta.url === entryUrl) {
-  runCli().catch((error) => {
-    console.error(formatRuntimeError(error));
-    process.exitCode = 1;
-  });
 }

@@ -1,4 +1,4 @@
-import { Agent } from "@agentik/runtime";
+import { Agent } from "@jaredpalmer/agentik";
 import { createMockModel } from "./mock-model";
 
 // Demonstrates steering vs follow-up message queues.
