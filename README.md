@@ -4,6 +4,11 @@ Agentik is a composable runtime for building coding agents on top of AI SDK v6. 
 
 <img alt="Screenshot" src="https://github.com/user-attachments/assets/893600ef-b6cf-4ca3-b3f2-07f850cb6d20" width="500" height="500" />
 
+## Installation
+
+```bash
+npm install @jaredpalmer/agentik
+```
 
 **What you get out of the box:**
 
@@ -295,11 +300,26 @@ sharedMemory.set("todos", "Captured in explorer output.");
 
 ## CLI
 
-**Install**
+`@jaredpalmer/coding-agent` is a minimal demo CLI that wires the runtime into an interactive TUI. It serves as a reference client showing how to compose `Agent` with tools and render streaming events. Install it globally to get the `agentik` command:
 
 ```bash
 npm install -g @jaredpalmer/coding-agent
 ```
+
+You can also run it directly without installing:
+
+```bash
+npx @jaredpalmer/coding-agent
+```
+
+**Environment variables**
+
+| Variable                 | Required | Description                               |
+| ------------------------ | -------- | ----------------------------------------- |
+| `AGENTIK_MODEL`          | Yes      | Model identifier (e.g. `claude-opus-4-5`) |
+| `ANTHROPIC_API_KEY`      | Yes      | Your Anthropic API key                    |
+| `AGENTIK_SUBAGENTS`      | No       | JSON array of subagent configs            |
+| `AGENTIK_SUBAGENTS_FILE` | No       | Path to a JSON file with subagent configs |
 
 **Usage**
 
