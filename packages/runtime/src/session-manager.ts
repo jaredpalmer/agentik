@@ -625,7 +625,7 @@ export class SessionManager {
 
   getHeader(): SessionHeader | null {
     const header = this.fileEntries.find((entry) => entry.type === "session");
-    return header ? (header) : null;
+    return header ? header : null;
   }
 
   getEntries(): SessionEntry[] {

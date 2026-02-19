@@ -97,7 +97,9 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
   agent.subscribe((event) => {
     if (event.type === "message_update") {
-      process.stdout.write(event.delta);
+      if (event.assistantMessageEvent.type === "text_delta") {
+        process.stdout.write(event.assistantMessageEvent.delta);
+      }
       return;
     }
     if (event.type === "error") {

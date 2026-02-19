@@ -653,9 +653,11 @@ export class TuiApp {
           break;
         }
 
-        entry.content += event.delta;
-        this.applyMessageContent(entry, entry.content);
-        this.render();
+        if (event.assistantMessageEvent.type === "text_delta") {
+          entry.content += event.assistantMessageEvent.delta;
+          this.applyMessageContent(entry, entry.content);
+          this.render();
+        }
         break;
       }
       case "message_end": {
@@ -735,9 +737,6 @@ export class TuiApp {
           break;
         }
         this.onToolEnd(event.toolCallId, event.toolName, event.result, event.isError);
-        break;
-      }
-      case "stream_part": {
         break;
       }
       case "subagent_start":

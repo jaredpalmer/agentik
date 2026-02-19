@@ -9,31 +9,21 @@ import type {
   ToolNeedsApprovalFunction,
   ToolResultOutput,
 } from "@ai-sdk/provider-utils";
+import type { CallSettings, LanguageModel, ToolChoice } from "ai";
 import type {
-  CallSettings,
-  LanguageModel,
-  AgentStreamParameters,
-  StreamTextResult,
-  PrepareStepFunction,
-  StopCondition,
-  StreamTextTransform,
-  TextStreamPart,
-  ToolLoopAgent,
-  ToolChoice,
-  ToolLoopAgentOnFinishCallback,
-  ToolLoopAgentOnStepFinishCallback,
-  ToolLoopAgentSettings,
-  ToolSet,
-} from "ai";
-
-type AgentOutput = import("ai").Output.Output;
+  Message,
+  AssistantMessage,
+  ToolCall,
+  ToolResultMessage as OwnToolResultMessage,
+} from "./messages";
+import type { HookConfig } from "./hooks";
 
 export interface CustomAgentMessages {}
 
 type CustomAgentMessage = CustomAgentMessages[keyof CustomAgentMessages];
 type UnionIfNotNever<A, B> = [B] extends [never] ? A : A | B;
 
-export type AgentMessage = UnionIfNotNever<ModelMessage, CustomAgentMessage>;
+export type AgentMessage = UnionIfNotNever<Message | ModelMessage, CustomAgentMessage>;
 
 export type AgentToolResult<OUTPUT = unknown, UI = unknown> = {
   output: OUTPUT;
@@ -118,6 +108,33 @@ export interface AgentState {
   error?: string;
 }
 
+export type AssistantMessageEvent =
+  | { type: "start"; partial: AssistantMessage }
+  | { type: "text_start"; contentIndex: number; partial: AssistantMessage }
+  | { type: "text_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
+  | { type: "text_end"; contentIndex: number; content: string; partial: AssistantMessage }
+  | { type: "thinking_start"; contentIndex: number; partial: AssistantMessage }
+  | { type: "thinking_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
+  | { type: "thinking_end"; contentIndex: number; content: string; partial: AssistantMessage }
+  | { type: "toolcall_start"; contentIndex: number; partial: AssistantMessage }
+  | { type: "toolcall_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
+  | {
+      type: "toolcall_end";
+      contentIndex: number;
+      toolCall: ToolCall;
+      partial: AssistantMessage;
+    }
+  | {
+      type: "done";
+      reason: "stop" | "length" | "toolUse";
+      message: AssistantMessage;
+    }
+  | {
+      type: "error";
+      reason: "aborted" | "error";
+      error: AssistantMessage;
+    };
+
 export type AgentEvent =
   | { type: "agent_start" }
   | { type: "agent_end"; messages: AgentMessage[] }
@@ -125,12 +142,15 @@ export type AgentEvent =
   | {
       type: "turn_end";
       message: AgentMessage | null;
-      toolResults: unknown[];
+      toolResults: OwnToolResultMessage[] | unknown[];
     }
   | { type: "message_start"; message: AgentMessage }
-  | { type: "message_update"; message: AgentMessage; delta: string }
+  | {
+      type: "message_update";
+      message: AgentMessage;
+      assistantMessageEvent: AssistantMessageEvent;
+    }
   | { type: "message_end"; message: AgentMessage }
-  | { type: "stream_part"; part: TextStreamPart<ToolSet> }
   | {
       type: "tool_execution_start";
       toolCallId: string;
@@ -173,51 +193,34 @@ export type AgentEvent =
     }
   | { type: "error"; error: unknown };
 
-export type ResolveModelOptions<CALL_OPTIONS = never> = {
+export type ResolveModelOptions = {
   model: LanguageModel;
   sessionId?: string;
-  callOptions?: CALL_OPTIONS;
 };
 
-export type AgentConfig<CALL_OPTIONS = never> = {
+export type AgentConfig = {
   model: LanguageModel;
   instructions?: string | SystemModelMessage | Array<SystemModelMessage>;
   tools?: AgentToolDefinition[];
-  toolChoice?: ToolChoice<ToolSet>;
-  stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
-  output?: AgentOutput;
+  toolChoice?: ToolChoice<Record<string, unknown>>;
   providerOptions?: ProviderOptions;
   callSettings?: CallSettings;
-  prepareStep?: PrepareStepFunction<ToolSet>;
-  callOptionsSchema?: ToolLoopAgentSettings<
-    CALL_OPTIONS,
-    ToolSet,
-    AgentOutput
-  >["callOptionsSchema"];
-  prepareCall?: ToolLoopAgentSettings<CALL_OPTIONS, ToolSet, AgentOutput>["prepareCall"];
-  onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
-  onFinish?: ToolLoopAgentOnFinishCallback<ToolSet>;
-  experimental_transform?: StreamTextTransform<ToolSet> | Array<StreamTextTransform<ToolSet>>;
-  streamFn?: (options: {
-    agent: ToolLoopAgent<CALL_OPTIONS, ToolSet, AgentOutput>;
-    params: AgentStreamParameters<CALL_OPTIONS, ToolSet>;
-  }) => PromiseLike<StreamTextResult<ToolSet, AgentOutput>>;
   steeringMode?: QueueMode;
   followUpMode?: QueueMode;
-  convertToModelMessages?: (messages: AgentMessage[]) => PromiseLike<ModelMessage[]>;
+  convertToModelMessages?: (
+    messages: AgentMessage[]
+  ) => ModelMessage[] | PromiseLike<ModelMessage[]>;
   transformContext?: (
     messages: AgentMessage[],
     signal?: AbortSignal
   ) => PromiseLike<AgentMessage[]>;
   onEvent?: (event: AgentEvent) => void;
-  loopStrategy?: "tool-loop-agent" | "manual";
   sessionId?: string;
   thinkingLevel?: ThinkingLevel;
   thinkingBudgets?: ThinkingBudgets;
-  maxRetryDelayMs?: number;
-  resolveModel?: (
-    options: ResolveModelOptions<CALL_OPTIONS>
-  ) => LanguageModel | PromiseLike<LanguageModel>;
+  maxSteps?: number;
+  hooks?: HookConfig;
+  resolveModel?: (options: ResolveModelOptions) => LanguageModel | PromiseLike<LanguageModel>;
   thinkingAdapter?: (options: {
     providerOptions?: ProviderOptions;
     thinkingLevel?: ThinkingLevel;
@@ -235,12 +238,9 @@ export type AgentConfig<CALL_OPTIONS = never> = {
   }) => Record<string, string> | undefined;
 };
 
-export type AgentCallOptions<CALL_OPTIONS = never> = {
-  options?: CALL_OPTIONS;
+export type AgentCallOptions = {
   abortSignal?: AbortSignal;
   timeout?: number | { totalMs?: number; stepMs?: number; chunkMs?: number };
-  experimental_transform?: StreamTextTransform<ToolSet> | Array<StreamTextTransform<ToolSet>>;
-  onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
 };
 
 export type SessionHeader = {

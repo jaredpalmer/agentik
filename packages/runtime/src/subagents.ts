@@ -1,16 +1,9 @@
-import type { ModelMessage, SystemModelMessage } from "@ai-sdk/provider-utils";
+import type { SystemModelMessage } from "@ai-sdk/provider-utils";
 import { jsonSchema } from "@ai-sdk/provider-utils";
-import {
-  ToolLoopAgent,
-  readUIMessageStream,
-  type ToolLoopAgentOnFinishCallback,
-  type ToolLoopAgentOnStepFinishCallback,
-  type ToolSet,
-  type UIMessage,
-} from "ai";
-import { createPrepareCall, createPrepareStep } from "./agent-config-utils";
+
 import type { AgentConfig, AgentToolDefinition } from "./types";
-import { createToolSet } from "./toolset";
+import type { AssistantMessage, UserMessage } from "./messages";
+import { agentLoop, type AgentLoopConfig, type AgentLoopContext } from "./agent-loop";
 
 export type SharedMemorySnapshot = Record<string, unknown>;
 
@@ -34,16 +27,16 @@ export class SharedMemoryStore {
   }
 }
 
-export type SubagentSpec<CALL_OPTIONS = never> = {
+export type SubagentSpec = {
   id: string;
-  config: AgentConfig<CALL_OPTIONS>;
+  config: AgentConfig;
   memory?: SharedMemoryStore;
 };
 
-export class SubagentRegistry<CALL_OPTIONS = never> {
-  private agents = new Map<string, SubagentSpec<CALL_OPTIONS>>();
+export class SubagentRegistry {
+  private agents = new Map<string, SubagentSpec>();
 
-  register(spec: SubagentSpec<CALL_OPTIONS>): SubagentSpec<CALL_OPTIONS> {
+  register(spec: SubagentSpec): SubagentSpec {
     if (this.agents.has(spec.id)) {
       throw new Error(`Subagent ${spec.id} already exists.`);
     }
@@ -51,11 +44,11 @@ export class SubagentRegistry<CALL_OPTIONS = never> {
     return spec;
   }
 
-  get(id: string): SubagentSpec<CALL_OPTIONS> | undefined {
+  get(id: string): SubagentSpec | undefined {
     return this.agents.get(id);
   }
 
-  list(): SubagentSpec<CALL_OPTIONS>[] {
+  list(): SubagentSpec[] {
     return Array.from(this.agents.values());
   }
 
@@ -77,48 +70,17 @@ const subagentSchema = jsonSchema<SubagentToolInput>({
   additionalProperties: false,
 });
 
-export type SubagentToolOptions<CALL_OPTIONS = never> = {
+export type SubagentToolOptions = {
   id: string;
-  registry: SubagentRegistry<CALL_OPTIONS>;
+  registry: SubagentRegistry;
   name?: string;
   description?: string;
   label?: string;
 };
 
-function uiMessageToText(message: UIMessage): string {
-  const parts = message.parts ?? [];
-  return parts
-    .filter((part) => part.type === "text")
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("");
-}
-
-function buildToolLoopAgent<CALL_OPTIONS>(
-  config: AgentConfig<CALL_OPTIONS>,
-  tools: AgentToolDefinition[]
-) {
-  const toolSet = createToolSet(tools ?? []);
-
-  return new ToolLoopAgent<CALL_OPTIONS, ToolSet>({
-    model: config.model,
-    tools: toolSet,
-    instructions: config.instructions,
-    toolChoice: config.toolChoice,
-    stopWhen: config.stopWhen as never,
-    output: config.output as never,
-    providerOptions: config.providerOptions,
-    prepareStep: createPrepareStep(config),
-    prepareCall: createPrepareCall(config),
-    callOptionsSchema: config.callOptionsSchema,
-    onStepFinish: config.onStepFinish as ToolLoopAgentOnStepFinishCallback<ToolSet>,
-    onFinish: config.onFinish as ToolLoopAgentOnFinishCallback<ToolSet>,
-    ...(config.callSettings as Record<string, unknown> | undefined),
-  });
-}
-
-export function createSubagentTool<CALL_OPTIONS = never>(
-  options: SubagentToolOptions<CALL_OPTIONS>
-): AgentToolDefinition<SubagentToolInput, string, UIMessage> {
+export function createSubagentTool(
+  options: SubagentToolOptions
+): AgentToolDefinition<SubagentToolInput, string, AssistantMessage> {
   const spec = options.registry.get(options.id);
   if (!spec) {
     throw new Error(`Subagent ${options.id} is not registered.`);
@@ -135,38 +97,52 @@ export function createSubagentTool<CALL_OPTIONS = never>(
     inputSchema: subagentSchema,
     toModelOutput: ({ output }) => ({ type: "text", value: output ?? "" }),
     execute: async function* (input, execOptions) {
-      const agent = buildToolLoopAgent(spec.config, spec.config.tools ?? []);
-      const messages = [{ role: "user", content: input.prompt }] satisfies ModelMessage[];
+      const userMessage: UserMessage = {
+        role: "user",
+        content: input.prompt,
+        timestamp: Date.now(),
+      };
 
-      const streamParams = {
-        messages,
-        abortSignal: execOptions.abortSignal,
-      } as const;
+      const context: AgentLoopContext = {
+        instructions: spec.config.instructions,
+        messages: [],
+        tools: spec.config.tools ?? [],
+      };
 
-      const stream = spec.config.streamFn
-        ? await spec.config.streamFn({ agent, params: streamParams })
-        : await agent.stream(streamParams);
+      const loopConfig: AgentLoopConfig = {
+        model: spec.config.model,
+        toolChoice: spec.config.toolChoice,
+        providerOptions: spec.config.providerOptions,
+        callSettings: spec.config.callSettings,
+        maxSteps: spec.config.maxSteps,
+        convertToModelMessages: spec.config.convertToModelMessages,
+        transformContext: spec.config.transformContext,
+        thinkingLevel: spec.config.thinkingLevel,
+        thinkingBudgets: spec.config.thinkingBudgets,
+        thinkingAdapter: spec.config.thinkingAdapter,
+        getApiKey: spec.config.getApiKey,
+        apiKeyHeaders: spec.config.apiKeyHeaders,
+        sessionId: spec.config.sessionId,
+      };
 
-      const uiStream = stream.toUIMessageStream();
-      let lastText = "";
+      const eventStream = agentLoop([userMessage], context, loopConfig, execOptions.abortSignal);
 
-      for await (const uiMessage of readUIMessageStream({ stream: uiStream })) {
-        lastText = uiMessageToText(uiMessage);
-        yield {
-          output: lastText,
-          ui: uiMessage,
-        };
+      for await (const event of eventStream) {
+        if (event.type === "message_end" && "stopReason" in event.message) {
+          const msg = event.message;
+          const text = msg.content
+            .filter((p) => p.type === "text")
+            .map((p) => (p.type === "text" ? p.text : ""))
+            .join("");
+          yield { output: text, ui: msg };
+        }
       }
-
-      return;
     },
-  } satisfies AgentToolDefinition<SubagentToolInput, string, UIMessage>;
+  } satisfies AgentToolDefinition<SubagentToolInput, string, AssistantMessage>;
 }
 
-export function createSubagentRegistry<CALL_OPTIONS = never>(
-  specs: SubagentSpec<CALL_OPTIONS>[] = []
-): SubagentRegistry<CALL_OPTIONS> {
-  const registry = new SubagentRegistry<CALL_OPTIONS>();
+export function createSubagentRegistry(specs: SubagentSpec[] = []): SubagentRegistry {
+  const registry = new SubagentRegistry();
   for (const spec of specs) {
     registry.register(spec);
   }

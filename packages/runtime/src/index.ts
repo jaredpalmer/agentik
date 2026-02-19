@@ -1,4 +1,47 @@
 export { Agent, type AgentOptions } from "./agent";
+export {
+  agentLoop,
+  agentLoopContinue,
+  type AgentLoopContext,
+  type AgentLoopConfig,
+  type ResolveModelFn,
+  type ThinkingAdapterFn,
+  type GetApiKeyFn,
+  type ApiKeyHeadersFn,
+} from "./agent-loop";
+export { EventStream } from "./event-stream";
+export {
+  HookRunner,
+  type HookCallback,
+  type HookMatcher,
+  type HookConfig,
+  type HookResult,
+  type HookInput,
+  type HookContext,
+  type HookEventName,
+  type PreToolUseDecision,
+} from "./hooks";
+export type {
+  ToolProvider,
+  SkillProvider,
+  StorageProvider,
+  ToolProviderContext,
+} from "./providers";
+export { createAgentTools, type AgentDefinition } from "./agent-definition";
+export type {
+  TextContent,
+  ThinkingContent,
+  ImageContent,
+  ToolCall,
+  ContentPart,
+  Usage,
+  StopReason,
+  UserMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  Message,
+} from "./messages";
+export { isOwnMessage, convertToModelMessages } from "./convert-messages";
 export { getAgentDir, getSessionsDir, encodeCwd } from "./config";
 export { FileAuthStore, InMemoryAuthStore, type AuthStore } from "./auth-store";
 export { ModelRegistry, type ModelDefinition, type ModelFactory } from "./model-registry";
