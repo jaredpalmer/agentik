@@ -1,12 +1,22 @@
 # Agentik
 
-Agentik’s goal is to make building coding agents feel boring and composable: a small, deterministic runtime with optional session recording, and a minimal CLI that acts as a reference client. You can embed the runtime in your own product, or use the CLI when you want a ready-made interface.
+Agentik is a composable runtime for building coding agents on top of AI SDK v6. It gives you a modular agent loop with streaming tool execution, lifecycle hooks, session recording, subagent delegation, and a structured event stream... allowing you to focus on your tools and UX instead of wiring up the loop yourself. Embed the runtime in your own product, or use the included CLI as a ready-made interface.
+
+**What you get out of the box:**
+
+- **Agent loop** — multi-turn reasoning with automatic tool execution, streaming responses, and extended thinking support
+- **Lifecycle hooks** — pre/post tool-use approval, stop conditions, session events, and subagent lifecycle control
+- **Message queues** — steering and follow-up queues let users redirect or extend agent runs mid-flight
+- **Session recording** — pluggable `SessionStore` with branching tree structure and compaction utilities
+- **Subagents** — delegate work to nested agents with independent configs and shared memory
+- **Event stream** — granular events for text, thinking, tool calls, and subagent activity, ready to drive any UI
+- **Built-in tools** — read, write, edit, glob, grep, bash, webfetch, and more
 
 ## Architecture
 
 Agentik is intentionally split into two layers so you can adopt only what you need.
 
-- `runtime`: A thin wrapper around AI SDK v6 `ToolLoopAgent` that owns the tool loop, emits a stable event stream, and provides a small set of built-in tools.
+- `runtime`: A modular agent loop built on AI SDK v6 `streamText` that owns tool execution, emits a structured event stream, and provides lifecycle hooks and built-in tools.
 - `cli`: A minimal reference client that wires the runtime into a TUI and demonstrates streaming, tool events, and UI rendering.
 
 **Packages**
@@ -16,7 +26,7 @@ Agentik is intentionally split into two layers so you can adopt only what you ne
 
 ## Runtime
 
-`@agentik/runtime` is the thin loop around AI SDK v6 that owns tool execution and emits a structured event stream. The primary entrypoint is `Agent`, which takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners):
+`@agentik/runtime` is a modular agent loop built on AI SDK v6 `streamText` that owns tool execution and emits a structured event stream. The primary entrypoint is `Agent`, which takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners):
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
@@ -336,7 +346,7 @@ AI SDK gives you the primitives. Agentik packages those primitives into a repeat
 <details>
 <summary>Do you use AI SDK’s ToolLoopAgent?</summary>
 
-Yes. `@agentik/runtime` wraps `ToolLoopAgent` and focuses on event emission and tool wiring instead of re-implementing the loop.
+No. `@agentik/runtime` implements its own agent loop on top of AI SDK's `streamText`, giving it full control over tool execution, event emission, and lifecycle hooks.
 
 </details>
 
