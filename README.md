@@ -1,6 +1,6 @@
 # Agentik
 
-Agentik is a composable runtime for building coding agents on top of AI SDK v6. It gives you a modular agent loop with streaming tool execution, lifecycle hooks, session recording, subagent delegation, and a structured event stream... allowing you to focus on your tools and UX instead of wiring up the loop yourself. Embed the runtime in your own product, or use the included CLI as a ready-made interface.
+Agentik is a composable runtime for building coding agents on top of AI SDK v6. It gives you a modular agent loop with streaming tool execution, lifecycle hooks, session recording, subagent delegation, and a structured event stream—allowing you to focus on your tools and UX instead of wiring up the loop yourself. Embed the runtime in your own product, or use the included CLI as a ready-made interface.
 
 **What you get out of the box:**
 
@@ -22,7 +22,7 @@ Agentik is intentionally split into two layers so you can adopt only what you ne
 **Packages**
 
 - `@jaredpalmer/agentik` (`packages/runtime`): core agent loop/runtime, tool calls, and event model built on AI SDK
-- `@jaredpalmer/coding-agent` (`packages/coding-agent`): minimal agent CLI and TUI built on opentui
+- `@jaredpalmer/coding-agent` (`packages/coding-agent`): minimal agent CLI and TUI built on OpenTUI
 
 ## Runtime
 
@@ -329,6 +329,10 @@ The CLI is intentionally small and serves as a reference client. It shows how to
 - Prototype new tools (filesystem, webfetch, bash) against a stable runtime loop.
 - Create a custom TUI or web UI by subscribing to runtime events.
 - Spin up optional subagents for exploration tasks while keeping a shared memory snapshot.
+
+## Acknowledgements
+
+This project started as a port of [badlogic/pi-mono](https://github.com/badlogic/pi-mono), refactored to be built on [AI SDK](https://github.com/vercel/ai) and [OpenTUI](https://github.com/anomalyco/opentui).
 
 ## FAQ
 
