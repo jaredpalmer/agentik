@@ -27,6 +27,17 @@ Agentik is intentionally split into two layers so you can adopt only what you ne
 - `@jaredpalmer/agentik` (`packages/runtime`): A modular agent loop built on AI SDK v6 `streamText` that owns tool execution, emits a structured event stream, and provides lifecycle hooks and built-in tools.
 - `@jaredpalmer/coding-agent` (`packages/coding-agent`): A minimal reference CLI and TUI built on OpenTUI that wires the runtime into an interactive interface.
 
+## Zero-config quickstart
+
+If you want a repo-aware workflow without writing glue code, scaffold optional local context files:
+
+```bash
+agentik init
+agentik --print --prompt "Summarize this repo"
+```
+
+The scaffold is optional, advanced users can ignore it, and runtime package behavior is unchanged.
+
 ## Runtime
 
 `@jaredpalmer/agentik` is a modular agent loop built on AI SDK v6 `streamText` that owns tool execution and emits a structured event stream. The primary entrypoint is `Agent`, which takes a model, tools, and optional hooks (context transforms, custom message conversion, event listeners):

@@ -653,8 +653,20 @@ export class TuiApp {
           break;
         }
 
-        if (event.assistantMessageEvent.type === "text_delta") {
-          entry.content += event.assistantMessageEvent.delta;
+        const assistantEvent = (
+          event as { assistantMessageEvent?: { type?: string; delta?: string } }
+        ).assistantMessageEvent;
+        const legacyDelta = (event as { delta?: string }).delta;
+
+        if (assistantEvent?.type === "text_delta") {
+          entry.content += assistantEvent.delta ?? "";
+          this.applyMessageContent(entry, entry.content);
+          this.render();
+          break;
+        }
+
+        if (typeof legacyDelta === "string" && legacyDelta.length > 0) {
+          entry.content += legacyDelta;
           this.applyMessageContent(entry, entry.content);
           this.render();
         }
