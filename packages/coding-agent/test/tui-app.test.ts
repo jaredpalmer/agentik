@@ -23,7 +23,10 @@ describe("TuiApp", () => {
     handleEvent({
       type: "message_update",
       message: { role: "assistant", content: "" },
-      delta: "Hi",
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Hi",
+      },
     });
     handleEvent({ type: "message_end", message: { role: "assistant", content: "Hi" } });
 
