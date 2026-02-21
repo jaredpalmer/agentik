@@ -1,5 +1,4 @@
-import { stat } from "node:fs/promises";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { glob } from "glob";
 import { jsonSchema } from "@ai-sdk/provider-utils";
