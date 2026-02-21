@@ -15,8 +15,11 @@ import {
   createWriteTool,
   type AgentToolDefinition,
 } from "@jaredpalmer/agentik";
-import { TuiApp } from "./tui/tui-app";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { TuiApp } from "./tui/tui-app";
+import { createSessionLogger, type CliRunMode, withPolicyGuards } from "./policy";
+import { hasRepoScaffold, initScaffold, loadRepoContext, loadSettings } from "./repo-scaffold";
 
 type CliMode = "interactive" | "print" | "rpc";
 
@@ -30,6 +33,11 @@ const ENV_SUBAGENTS = "AGENTIK_SUBAGENTS";
 const ENV_SUBAGENTS_FILE = "AGENTIK_SUBAGENTS_FILE";
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<void> {
+  if (argv[0] === "init") {
+    await runInit(argv.slice(1));
+    return;
+  }
+
   const args = new Set(argv);
   const mode = parseMode(args);
   const prompt = getArgValue(argv, "--prompt");
@@ -45,6 +53,11 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
   const model = anthropic(modelId);
   const cwd = process.cwd();
+  const hasScaffold = hasRepoScaffold(cwd);
+  const settings = hasScaffold ? await loadSettings(cwd) : undefined;
+  const repoContext = hasScaffold ? await loadRepoContext({ cwd }) : { messages: [] };
+  const sessionLogger = settings ? await createSessionLogger({ cwd, settings }) : undefined;
+
   // Tool definitions are heterogeneous; we coerce to the shared type to avoid variance issues with `needsApproval`.
   const baseTools = [
     createReadTool(cwd),
@@ -59,6 +72,12 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     createWebFetchTool(),
   ] as AgentToolDefinition[];
 
+  const policyMode: CliRunMode = mode === "interactive" ? "interactive" : "print";
+  const guardedBaseTools =
+    settings && hasScaffold
+      ? withPolicyGuards({ tools: baseTools, settings, mode: policyMode, sessionLogger })
+      : baseTools;
+
   const subagentConfigs = await loadSubagentConfigs();
   const subagentRegistry = createSubagentRegistry(
     subagentConfigs.map((config) => ({
@@ -66,7 +85,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       config: {
         model: config.model ? anthropic(config.model) : model,
         instructions: config.instructions,
-        tools: baseTools,
+        tools: guardedBaseTools,
       },
     }))
   );
@@ -76,9 +95,35 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       registry: subagentRegistry,
     })
   );
-  const tools = [...baseTools, ...subagentTools] as AgentToolDefinition[];
+  const tools = [...guardedBaseTools, ...subagentTools] as AgentToolDefinition[];
 
-  const agent = new Agent({ model, tools });
+  const scaffoldInstructions =
+    repoContext.messages.length > 0
+      ? repoContext.messages
+          .map((message) => `--- ${message.source} ---\n${message.content.trim()}`)
+          .join("\n\n")
+      : undefined;
+
+  const agent = new Agent({
+    model,
+    tools,
+    instructions: scaffoldInstructions,
+  });
+
+  if (sessionLogger) {
+    agent.subscribe((event) => {
+      if (event.type === "tool_execution_start" || event.type === "tool_execution_end") {
+        void sessionLogger.log({ type: "agent_event", event, timestamp: new Date().toISOString() });
+      }
+      if (event.type === "message_end" && event.message.role === "assistant") {
+        void sessionLogger.log({
+          type: "final_message",
+          message: event.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+  }
 
   if (mode === "interactive") {
     const app = new TuiApp({ agent });
@@ -108,6 +153,23 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   });
 
   await agent.prompt(prompt);
+}
+
+async function runInit(argv: string[]): Promise<void> {
+  const force = argv.includes("--force");
+  const dir = getArgValue(argv, "--dir") ?? process.cwd();
+  const targetDir = resolve(dir);
+  const written = await initScaffold({ cwd: targetDir, force });
+
+  if (written.length === 0) {
+    process.stdout.write(`Scaffold already exists in ${targetDir}. Use --force to overwrite.\n`);
+    return;
+  }
+
+  process.stdout.write(`Initialized Agentik scaffold in ${targetDir}:\n`);
+  for (const file of written) {
+    process.stdout.write(`- ${file}\n`);
+  }
 }
 
 function parseMode(args: Set<string>): CliMode {
