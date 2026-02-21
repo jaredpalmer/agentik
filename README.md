@@ -348,6 +348,21 @@ The CLI is intentionally small and serves as a reference client. It shows how to
 - Create a custom TUI or web UI by subscribing to runtime events.
 - Spin up optional subagents for exploration tasks while keeping a shared memory snapshot.
 
+## Releasing with GitHub
+
+Releases are managed with Changesets and GitHub Actions so publishing can happen entirely in GitHub.
+
+1. Add repository secrets:
+   - `NPM_TOKEN`: npm automation token with publish access.
+2. In feature PRs, add a changeset:
+
+```bash
+bun run changeset
+```
+
+3. Merge changesets into `main`. The `Release Packages` workflow will open/update a `chore(release): version packages` PR.
+4. Merge that release PR. The same workflow publishes changed packages to npm and creates GitHub releases.
+
 ## Acknowledgements
 
 This project started as a port of [badlogic/pi-mono](https://github.com/badlogic/pi-mono), refactored to be built on [AI SDK](https://github.com/vercel/ai) and [OpenTUI](https://github.com/anomalyco/opentui).

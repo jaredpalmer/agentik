@@ -16,9 +16,13 @@
     "format:check": "oxfmt --check .",
     "clean": "rm -rf packages/*/dist",
     "knip": "knip",
-    "test": "bun run build && bun test ./packages"
+    "test": "bun run build && bun test ./packages",
+    "changeset": "changeset",
+    "version-packages": "changeset version && bun install",
+    "release": "bun run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/bun": "^1.2.1",
     "@types/node": "^20.17.24",
     "knip": "^5.83.0",
