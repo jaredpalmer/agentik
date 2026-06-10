@@ -111,7 +111,11 @@ export class Agent {
 
   private emit(event: AgentEvent): void {
     for (const listener of this.listeners) {
-      listener(event);
+      try {
+        listener(event);
+      } catch (err) {
+        console.error("[Agent] Event listener threw:", err);
+      }
     }
     this.onEvent?.(event);
   }
@@ -288,6 +292,7 @@ export class Agent {
       }
     } catch (err: unknown) {
       this._state.error = err instanceof Error ? err.message : String(err);
+      this.emit({ type: "error", error: err });
     } finally {
       this._state.isStreaming = false;
       this._state.streamMessage = null;
@@ -358,6 +363,10 @@ export class Agent {
         this._state.isStreaming = false;
         this._state.streamMessage = null;
         break;
+      case "error":
+        this._state.error =
+          event.error instanceof Error ? event.error.message : String(event.error);
+        break;
     }
   }
 
@@ -411,6 +420,10 @@ function toUserMessage(input: string | AgentMessage): AgentMessage {
 
 function composeSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
   const controller = new AbortController();
+  if (a.aborted || b.aborted) {
+    controller.abort();
+    return controller.signal;
+  }
   const onAbort = () => controller.abort();
   a.addEventListener("abort", onAbort, { once: true });
   b.addEventListener("abort", onAbort, { once: true });

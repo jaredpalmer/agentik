@@ -39,7 +39,9 @@ const wordCountTool: AgentToolDefinition<WordCountInput, WordCountOutput> = {
 
 const agent = new Agent({
   model: anthropic(modelId),
-  tools: [wordCountTool],
+  // Tool definitions are heterogeneous; coerce to the shared type to avoid
+  // variance issues with `needsApproval`.
+  tools: [wordCountTool] as AgentToolDefinition[],
 });
 
 let toolCalls = 0;

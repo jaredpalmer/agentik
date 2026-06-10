@@ -1,5 +1,10 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { Agent, createListTool, createReadTool } from "@jaredpalmer/agentik";
+import {
+  Agent,
+  createListTool,
+  createReadTool,
+  type AgentToolDefinition,
+} from "@jaredpalmer/agentik";
 
 // Example using built-in file tools with a real model.
 // Requires environment variables:
@@ -17,7 +22,9 @@ if (!modelId || !process.env.ANTHROPIC_API_KEY) {
 const cwd = process.cwd();
 const agent = new Agent({
   model: anthropic(modelId),
-  tools: [createListTool(cwd), createReadTool(cwd)],
+  // Tool definitions are heterogeneous; coerce to the shared type to avoid
+  // variance issues with `needsApproval`.
+  tools: [createListTool(cwd), createReadTool(cwd)] as AgentToolDefinition[],
 });
 
 agent.subscribe((event) => {
@@ -27,8 +34,8 @@ agent.subscribe((event) => {
   if (event.type === "tool_execution_end") {
     console.log(`[tool:end] ${event.toolName} (error: ${event.isError})`);
   }
-  if (event.type === "message_update") {
-    process.stdout.write(event.delta);
+  if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+    process.stdout.write(event.assistantMessageEvent.delta);
   }
 });
 

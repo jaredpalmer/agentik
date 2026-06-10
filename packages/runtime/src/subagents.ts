@@ -4,6 +4,7 @@ import { jsonSchema } from "@ai-sdk/provider-utils";
 import type { AgentConfig, AgentToolDefinition } from "./types";
 import type { AssistantMessage, UserMessage } from "./messages";
 import { agentLoop, type AgentLoopConfig, type AgentLoopContext } from "./agent-loop";
+import { HookRunner } from "./hooks";
 
 export type SharedMemorySnapshot = Record<string, unknown>;
 
@@ -123,6 +124,14 @@ export function createSubagentTool(
         getApiKey: spec.config.getApiKey,
         apiKeyHeaders: spec.config.apiKeyHeaders,
         sessionId: spec.config.sessionId,
+        hookRunner: spec.config.hooks ? new HookRunner(spec.config.hooks) : undefined,
+        resolveModel: spec.config.resolveModel
+          ? () =>
+              spec.config.resolveModel!({
+                model: spec.config.model,
+                sessionId: spec.config.sessionId,
+              })
+          : undefined,
       };
 
       const eventStream = agentLoop([userMessage], context, loopConfig, execOptions.abortSignal);

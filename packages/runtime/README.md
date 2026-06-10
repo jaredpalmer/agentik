@@ -41,8 +41,8 @@ const agent = new Agent({
 });
 
 agent.subscribe((event) => {
-  if (event.type === "message_update") {
-    process.stdout.write(event.delta);
+  if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+    process.stdout.write(event.assistantMessageEvent.delta);
   }
 });
 
@@ -129,18 +129,18 @@ if (result) {
 }
 ```
 
-## Dynamic auth + proxy streaming
+## Dynamic auth + model resolution
 
-Use `getApiKey` to resolve short-lived tokens and `streamFn` to wrap or proxy the AI SDK stream.
+Use `getApiKey` to resolve short-lived credentials before each model call. The key is sent as an `Authorization: Bearer` header by default; provide `apiKeyHeaders` to customize the header per provider. For full control over how the model itself is constructed (proxies, per-session models, thinking-dependent variants), use `resolveModel`.
 
 ```ts
 import { Agent } from "@jaredpalmer/agentik";
 
 const agent = new Agent({
   model,
-  getApiKey: async (providerId) => process.env[`${providerId.toUpperCase()}_API_KEY`],
+  getApiKey: async (providerId, modelId) => fetchShortLivedToken(providerId),
   apiKeyHeaders: ({ apiKey }) => ({ "x-api-key": apiKey }), // customize per provider
-  streamFn: async ({ agent, params }) => agent.stream(params),
+  resolveModel: async ({ model, sessionId }) => model, // optionally swap the model per call
 });
 ```
 

@@ -19,8 +19,8 @@ const model = await registry.resolveModel("mock-model");
 const agent = new Agent({ model });
 
 agent.subscribe((event) => {
-  if (event.type === "message_update") {
-    process.stdout.write(event.delta);
+  if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+    process.stdout.write(event.assistantMessageEvent.delta);
   }
 });
 
