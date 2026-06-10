@@ -1,29 +1,37 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import {
-  Agent,
   SharedMemoryStore,
   SubagentRegistry,
-  createReadTool,
   createSubagentTool,
+  type AgentToolResult,
 } from "@jaredpalmer/agentik";
+import { createMockModel } from "./mock-model";
 
+// Create a subagent with shared memory and run it offline with a mock model.
 const sharedMemory = new SharedMemoryStore();
 const registry = new SubagentRegistry();
 
 registry.register({
   id: "explorer",
   config: {
-    model: anthropic("claude-opus-4-5"),
-    tools: [createReadTool(process.cwd())],
+    model: createMockModel("Explorer scanned the repo and found 2 TODOs."),
   },
   memory: sharedMemory,
 });
 
 const explorerTool = createSubagentTool({ id: "explorer", registry });
-const agent = new Agent({
-  model: anthropic("claude-opus-4-5"),
-  tools: [explorerTool],
-});
 
-await agent.prompt("Delegate to explorer: scan the repo for TODOs.");
-sharedMemory.set("todos", "Captured in explorer output.");
+// Normally the parent agent's model invokes this tool; call it directly here
+// to demonstrate the delegation flow without an API key.
+const stream = explorerTool.execute!(
+  { prompt: "Scan the repo for TODOs." },
+  { toolCallId: "demo-call", messages: [] }
+) as AsyncIterable<AgentToolResult<string>>;
+
+let output = "";
+for await (const partial of stream) {
+  output = partial.output;
+}
+
+sharedMemory.set("todos", output);
+console.log("Subagent output:", output);
+console.log("Shared memory snapshot:", sharedMemory.snapshot());

@@ -33,3 +33,5 @@ bun examples/runtime-builtin-tools-anthropic.ts
 - `subagents-shared-memory.ts`: create subagents with shared memory (mock model).
 
 The helper `mock-model.ts` provides a small offline model that streams a single response.
+
+Examples are typechecked against the built packages as part of `bun run typecheck` at the repo root.

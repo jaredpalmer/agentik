@@ -4,3 +4,6 @@ node_modules
 dist
 build
 tsconfig.tsbuildinfo
+
+# artifacts written by the runnable examples
+.agentik-example/

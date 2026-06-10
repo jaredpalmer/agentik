@@ -71,6 +71,21 @@ describe("EventStream", () => {
     expect(result).toBe(42);
   });
 
+  it("result() resolves after end() without a value", async () => {
+    const stream = new EventStream<string>();
+    stream.end();
+
+    expect(await stream.result()).toBeUndefined();
+  });
+
+  it("end() is idempotent and keeps the first result", async () => {
+    const stream = new EventStream<string, number>();
+    stream.end(1);
+    stream.end(2);
+
+    expect(await stream.result()).toBe(1);
+  });
+
   it("buffers events pushed before consumption", async () => {
     const stream = new EventStream<string>();
 

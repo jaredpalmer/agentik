@@ -115,7 +115,11 @@ export function agentLoop(
       stream.push({ type: "message_end", message: prompt });
     }
 
-    await runLoop(ctx, newMessages, config, signal, stream);
+    try {
+      await runLoop(ctx, newMessages, config, signal, stream);
+    } catch (err: unknown) {
+      endStreamWithError(stream, newMessages, err);
+    }
   })();
 
   return stream;
@@ -144,7 +148,11 @@ export function agentLoopContinue(
     stream.push({ type: "agent_start" });
     stream.push({ type: "turn_start" });
 
-    await runLoop(ctx, newMessages, config, signal, stream);
+    try {
+      await runLoop(ctx, newMessages, config, signal, stream);
+    } catch (err: unknown) {
+      endStreamWithError(stream, newMessages, err);
+    }
   })();
 
   return stream;
@@ -153,6 +161,16 @@ export function agentLoopContinue(
 // ============================================================================
 // Internal: Main Loop
 // ============================================================================
+
+function endStreamWithError(
+  stream: EventStream<AgentEvent, AgentMessage[]>,
+  newMessages: AgentMessage[],
+  err: unknown
+): void {
+  stream.push({ type: "error", error: err });
+  stream.push({ type: "agent_end", messages: newMessages });
+  stream.end(newMessages);
+}
 
 async function runLoop(
   ctx: AgentLoopContext,
@@ -216,8 +234,7 @@ async function runLoop(
           message,
           signal,
           stream,
-          config.getSteeringMessages,
-          config.hookRunner,
+          config,
           ctx
         );
         toolResults.push(...toolExecution.toolResults);
@@ -239,6 +256,9 @@ async function runLoop(
         pendingMessages = (await config.getSteeringMessages?.()) || [];
       }
     }
+
+    // Stop without consulting hooks or follow-ups when aborted or out of steps
+    if (signal?.aborted || stepCount >= maxSteps) break;
 
     // Check for stop hook
     if (config.hookRunner) {
@@ -317,6 +337,18 @@ async function streamAssistantResponse(
     model = await config.resolveModel({ thinkingLevel: config.thinkingLevel });
   }
 
+  // Resolve dynamic auth headers
+  const callSettings: CallSettings = { ...config.callSettings };
+  if (config.getApiKey && typeof model !== "string") {
+    const apiKey = await config.getApiKey(model.provider, model.modelId);
+    if (apiKey) {
+      const authHeaders = config.apiKeyHeaders
+        ? config.apiKeyHeaders({ providerId: model.provider, modelId: model.modelId, apiKey })
+        : { Authorization: `Bearer ${apiKey}` };
+      callSettings.headers = { ...authHeaders, ...callSettings.headers };
+    }
+  }
+
   // Build provider options (thinking budgets)
   let providerOptions: ProviderOptions | undefined = config.providerOptions
     ? { ...config.providerOptions }
@@ -371,7 +403,7 @@ async function streamAssistantResponse(
       toolChoice: config.toolChoice,
       abortSignal: signal,
       providerOptions,
-      ...config.callSettings,
+      ...callSettings,
     });
 
     stream.push({ type: "message_start", message: { ...partialMessage } });
@@ -699,13 +731,17 @@ async function executeToolCalls(
   assistantMessage: AssistantMessage,
   signal: AbortSignal | undefined,
   stream: EventStream<AgentEvent, AgentMessage[]>,
-  getSteeringMessages: AgentLoopConfig["getSteeringMessages"],
-  hookRunner: HookRunner | undefined,
+  config: AgentLoopConfig,
   ctx: AgentLoopContext
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
+  const { getSteeringMessages, hookRunner } = config;
   const toolCalls = assistantMessage.content.filter((c): c is ToolCall => c.type === "toolCall");
   const results: ToolResultMessage[] = [];
   let steeringMessages: AgentMessage[] | undefined;
+  const makeHookContext = () => ({
+    sessionId: config.sessionId,
+    messages: ctx.messages.filter((m): m is Message => isMessage(m)),
+  });
 
   for (let index = 0; index < toolCalls.length; index++) {
     let toolCall = toolCalls[index];
@@ -720,6 +756,8 @@ async function executeToolCalls(
 
     let result: AgentToolResult | undefined;
     let isError = false;
+    const subagentId = tool?.kind === "subagent" ? (tool.subagentId ?? tool.name) : undefined;
+    let subagentStarted = false;
 
     try {
       if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
@@ -731,11 +769,7 @@ async function executeToolCalls(
           toolInput: toolCall.arguments,
           toolCallId: toolCall.id,
         };
-        const hookCtx = {
-          sessionId: ctx.instructions ? undefined : undefined,
-          messages: ctx.messages.filter((m): m is Message => isMessage(m)),
-        };
-        const hookResult = await hookRunner.runPreToolUse(hookInput, hookCtx);
+        const hookResult = await hookRunner.runPreToolUse(hookInput, makeHookContext());
 
         if (hookResult.decision === "deny") {
           result = {
@@ -748,6 +782,19 @@ async function executeToolCalls(
       }
 
       if (!result && tool.execute) {
+        if (subagentId) {
+          subagentStarted = true;
+          stream.push({
+            type: "subagent_start",
+            toolCallId: toolCall.id,
+            subagentId,
+            prompt:
+              typeof toolCall.arguments.prompt === "string"
+                ? toolCall.arguments.prompt
+                : JSON.stringify(toolCall.arguments),
+          });
+        }
+
         const execResult = tool.execute(toolCall.arguments, {
           toolCallId: toolCall.id,
           messages: convertToModelMessages(ctx.messages),
@@ -765,6 +812,18 @@ async function executeToolCalls(
               toolName: toolCall.name,
               partialResult: partial,
             });
+            if (subagentId) {
+              stream.push({
+                type: "subagent_update",
+                toolCallId: toolCall.id,
+                subagentId,
+                delta:
+                  typeof partial.output === "string"
+                    ? partial.output
+                    : JSON.stringify(partial.output),
+                ui: partial.ui,
+              });
+            }
           }
           result = lastResult;
         } else {
@@ -783,11 +842,7 @@ async function executeToolCalls(
           toolInput: toolCall.arguments,
           toolCallId: toolCall.id,
         };
-        const hookCtx = {
-          sessionId: undefined,
-          messages: ctx.messages.filter((m): m is Message => isMessage(m)),
-        };
-        await hookRunner.runPostToolUse(hookInput, result, hookCtx);
+        await hookRunner.runPostToolUse(hookInput, result, makeHookContext());
       }
     } catch (e) {
       result = {
@@ -802,19 +857,31 @@ async function executeToolCalls(
           toolInput: toolCall.arguments,
           toolCallId: toolCall.id,
         };
-        const hookCtx = {
-          sessionId: undefined,
-          messages: ctx.messages.filter((m): m is Message => isMessage(m)),
-        };
         await hookRunner.runPostToolUseFailure(
           hookInput,
           e instanceof Error ? e : new Error(String(e)),
-          hookCtx
+          makeHookContext()
         );
       }
     }
 
     const finalResult = result;
+
+    const outputText =
+      typeof finalResult.output === "string"
+        ? finalResult.output
+        : JSON.stringify(finalResult.output);
+
+    if (subagentId && subagentStarted) {
+      stream.push({
+        type: "subagent_end",
+        toolCallId: toolCall.id,
+        subagentId,
+        output: outputText,
+        isError,
+        ui: finalResult.ui,
+      });
+    }
 
     stream.push({
       type: "tool_execution_end",
@@ -823,11 +890,6 @@ async function executeToolCalls(
       result: finalResult,
       isError,
     });
-
-    const outputText =
-      typeof finalResult.output === "string"
-        ? finalResult.output
-        : JSON.stringify(finalResult.output);
 
     const toolResultMessage: ToolResultMessage = {
       role: "toolResult",

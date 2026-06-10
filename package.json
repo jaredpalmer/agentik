@@ -9,7 +9,7 @@
   "scripts": {
     "prepare": "lefthook install",
     "build": "tsc -b",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -b --pretty false && tsc -p examples --pretty false",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt .",
